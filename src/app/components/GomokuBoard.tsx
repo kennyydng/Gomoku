@@ -16,6 +16,7 @@ export interface GameStats {
 interface GomokuBoardProps {
   mode: GameMode
   onStatsChange?: (stats: GameStats) => void
+  onBotResponseTime?: (ms: number) => void
 }
 
 const BOARD_SIZE = 19
@@ -126,7 +127,7 @@ function boardHasWinner(capturesBlack: number, capturesWhite: number) {
   return null
 }
 
-function GomokuBoard({ mode, onStatsChange }: GomokuBoardProps) {
+function GomokuBoard({ mode, onStatsChange, onBotResponseTime }: GomokuBoardProps) {
   const [board, setBoard] = useState<number[][]>(() => createEmptyBoard())
   const [currentPlayer, setCurrentPlayer] = useState<Player>(1)
   const [capturesBlack, setCapturesBlack] = useState(0)
@@ -167,9 +168,9 @@ function GomokuBoard({ mode, onStatsChange }: GomokuBoardProps) {
 
     if (move.capturedPairs > 0) {
       if (player === 1) {
-        setCapturesBlack((value) => value + move.capturedPairs)
+        setCapturesBlack((value) => value + move.capturedPairs * 2)
       } else {
-        setCapturesWhite((value) => value + move.capturedPairs)
+        setCapturesWhite((value) => value + move.capturedPairs * 2)
       }
     }
   }
@@ -198,13 +199,21 @@ function GomokuBoard({ mode, onStatsChange }: GomokuBoardProps) {
     setIsLocked(true)
 
     try {
+      const startedAt = performance.now()
+      const controller = new AbortController()
+      const timeoutId = window.setTimeout(() => controller.abort(), 500)
+
       const response = await fetch('/api/bot', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ board: humanMove.board }),
+        signal: controller.signal,
       })
+
+      window.clearTimeout(timeoutId)
+      onBotResponseTime?.(Math.round(performance.now() - startedAt))
 
       if (!response.ok) {
         throw new Error('Bot response failed')
@@ -233,6 +242,7 @@ function GomokuBoard({ mode, onStatsChange }: GomokuBoardProps) {
       applyResolvedMove(aiMove, aiPlayer)
       setCurrentPlayer(humanPlayer)
     } catch {
+      onBotResponseTime?.(500)
       // Mock AI fallback: if the API fails, simply unlock the board.
     } finally {
       setIsLocked(false)
@@ -260,18 +270,8 @@ function GomokuBoard({ mode, onStatsChange }: GomokuBoardProps) {
 
   return (
     <div className="w-full">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-xs uppercase tracking-[0.32em] text-amber-200/65">Plateau 19×19</p>
-          <p className="mt-1 text-sm text-stone-300">Les pierres se posent sur les intersections, pas au centre des cases.</p>
-        </div>
-        <div className="rounded-full border border-amber-700/40 bg-[#120d09] px-4 py-2 text-sm text-stone-200">
-          {winner ? `Victoire du joueur ${winner === 1 ? 'noir' : 'blanc'}` : isLocked ? 'IA en cours...' : `À ${currentPlayer === 1 ? 'noir' : 'blanc'} de jouer`}
-        </div>
-      </div>
-
-      <div className="relative mx-auto w-full max-w-[min(92vmin,860px)]">
-        <div className="relative aspect-square rounded-[1.8rem] border border-amber-800/45 bg-[linear-gradient(135deg,_#c79b63_0%,_#b8834a_44%,_#8e5b30_100%)] p-[clamp(14px,2.2vw,24px)] shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_24px_80px_rgba(0,0,0,0.35)]">
+      <div className="relative mx-auto w-full max-w-[min(88vmin,76vh,720px)] sm:max-w-[min(84vmin,72vh,680px)]">
+        <div className="relative aspect-square rounded-[1.8rem] border border-amber-800/45 bg-[linear-gradient(135deg,_#c79b63_0%,_#b8834a_44%,_#8e5b30_100%)] p-[clamp(10px,1.6vw,18px)] shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_24px_80px_rgba(0,0,0,0.35)]">
           <div className="relative h-full w-full rounded-[1.1rem] bg-[radial-gradient(circle_at_top,_rgba(255,245,220,0.18),_transparent_32%),linear-gradient(180deg,_rgba(255,235,197,0.12),_rgba(255,235,197,0.02))]">
             <svg aria-hidden="true" className="absolute inset-0 h-full w-full">
               <rect x="0" y="0" width="100%" height="100%" rx="16" fill="rgba(255, 235, 197, 0.08)" />
@@ -290,7 +290,7 @@ function GomokuBoard({ mode, onStatsChange }: GomokuBoardProps) {
                 rowValues.map((cell, col) => {
                   const left = `${(col / BOARD_RANGE) * 100}%`
                   const top = `${(row / BOARD_RANGE) * 100}%`
-                  const stoneSize = `clamp(20px, 2.9vmin, 34px)`
+                  const stoneSize = `clamp(16px, 2.3vmin, 28px)`
                   const isHovered = hoveredCell?.row === row && hoveredCell?.col === col
                   const canPreview = cell === 0 && !isLocked && winner === null
 
@@ -317,8 +317,8 @@ function GomokuBoard({ mode, onStatsChange }: GomokuBoardProps) {
                       style={{
                         left,
                         top,
-                        width: 'min(2.2vw, 26px)',
-                        height: 'min(2.2vw, 26px)',
+                        width: 'min(1.9vw, 20px)',
+                        height: 'min(1.9vw, 20px)',
                       }}
                     >
                       {cell !== 0 ? (
