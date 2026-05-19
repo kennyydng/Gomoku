@@ -1,8 +1,74 @@
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import GomokuBoard, { type GameMode, type GameStats } from '../components/GomokuBoard'
+
+type Player = 1 | 2
+
+type Rule = {
+  title: string
+  category: 'Victory' | 'Capture' | 'Forbidden'
+  text: string
+  showBoard?: boolean
+  beforeBoard?: number[][]
+  afterBoard?: number[][]
+}
+
+const HELP_BOARD_SIZE = 5
+
+function createHelpBoard(stones: Array<{ row: number; col: number; player: Player }>) {
+  const board = Array.from({ length: HELP_BOARD_SIZE }, () => Array.from({ length: HELP_BOARD_SIZE }, () => 0))
+
+  for (const stone of stones) {
+    board[stone.row][stone.col] = stone.player
+  }
+
+  return board
+}
+
+const RULES: Rule[] = [
+  {
+    title: 'Victory',
+    category: 'Victory',
+    text: '• Align 5 or more stones of your color continuously to win.\n• A line of 6 or more also counts as a win.\n• If an alignment can be immediately broken by capture, it does not count as a win.\n• Capturing 10 opponent stones also wins the game.',
+    showBoard: false,
+  },
+  {
+    title: 'Capture',
+    category: 'Capture',
+    text: 'You capture a pair of opponent stones by flanking them on both sides with your stones. The two captured stones are removed from the board, freeing the intersections.',
+    showBoard: true,
+    beforeBoard: createHelpBoard([
+      { row: 2, col: 0, player: 1 },
+      { row: 2, col: 1, player: 2 },
+      { row: 2, col: 2, player: 2 },
+    ]),
+    afterBoard: createHelpBoard([
+      { row: 2, col: 0, player: 1 },
+      { row: 2, col: 3, player: 1 },
+    ]),
+  },
+  {
+    title: 'Forbidden',
+    category: 'Forbidden',
+    text: "A move that simultaneously creates two 'free-threes' is illegal, unless that same move captures a pair immediately.",
+    showBoard: true,
+    beforeBoard: createHelpBoard([
+      { row: 2, col: 0, player: 1 },
+      { row: 2, col: 1, player: 1 },
+      { row: 1, col: 2, player: 1 },
+      { row: 3, col: 2, player: 1 },
+    ]),
+    afterBoard: createHelpBoard([
+      { row: 2, col: 0, player: 1 },
+      { row: 2, col: 1, player: 1 },
+      { row: 2, col: 2, player: 1 },
+      { row: 1, col: 2, player: 1 },
+      { row: 3, col: 2, player: 1 },
+    ]),
+  },
+]
 
 function getTurnOrbClass(currentPlayer: 1 | 2) {
   return currentPlayer === 1
@@ -30,11 +96,38 @@ function getGaugeLabel(tone: 'black' | 'white', mode: GameMode) {
   return 'Player'
 }
 
+function HelpMiniBoard({ board }: { board: number[][] }) {
+  return (
+    <div
+      className="grid aspect-square w-full max-w-[170px] border border-amber-900/35 bg-[linear-gradient(135deg,_#c79b63_0%,_#b8834a_44%,_#8e5b30_100%)] p-1.5 shadow-[0_12px_28px_rgba(0,0,0,0.28)]"
+      style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}
+    >
+      {board.map((row, rowIndex) =>
+        row.map((cell, colIndex) => (
+          <div key={`${rowIndex}-${colIndex}`} className="aspect-square flex items-center justify-center border border-[rgba(39,25,14,0.35)] bg-[rgba(255,235,197,0.05)]">
+            {cell !== 0 ? (
+              <span
+                className={`h-[60%] w-[60%] rounded-full border ${
+                  cell === 1
+                    ? 'border-stone-700/60 bg-[radial-gradient(circle_at_30%_30%,_#8f8f8f_0%,_#232323_52%,_#050505_100%)] shadow-[inset_0_3px_5px_rgba(255,255,255,0.18),0_8px_12px_rgba(0,0,0,0.5)] ring-1 ring-black/15'
+                    : 'border-stone-300/70 bg-[radial-gradient(circle_at_30%_30%,_#ffffff_0%,_#ece4d7_50%,_#a89475_100%)] shadow-[inset_0_3px_5px_rgba(255,255,255,0.5),0_8px_12px_rgba(0,0,0,0.32)] ring-1 ring-white/20'
+                }`}
+              />
+            ) : null}
+          </div>
+        )),
+      )}
+    </div>
+  )
+}
+
 export default function GamePage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const modeParam = searchParams?.get('mode') as GameMode | null
   const [botResponseMs, setBotResponseMs] = useState<number | null>(null)
+  const [showRules, setShowRules] = useState(false)
+  const [activeCategory, setActiveCategory] = useState<Rule['category']>('Victory')
   const [gameStats, setGameStats] = useState<GameStats>({
     capturesBlack: 0,
     capturesWhite: 0,
@@ -43,15 +136,15 @@ export default function GamePage() {
     winner: null,
   })
 
+  const categories = useMemo(() => ['Victory', 'Capture', 'Forbidden'] as const, [])
+
   useEffect(() => {
     if (!modeParam) {
-      // If no mode, return to home
       router.replace('/')
     }
   }, [modeParam, router])
 
   useEffect(() => {
-    // mark in-progress so the home menu can't change mode mid-game
     try {
       sessionStorage.setItem('gomoku:inProgress', '1')
     } catch {}
@@ -70,6 +163,17 @@ export default function GamePage() {
       window.removeEventListener('beforeunload', onBeforeUnload)
     }
   }, [])
+
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    if (showRules) {
+      document.body.style.overflow = 'hidden'
+    }
+
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [showRules])
 
   const handleStatsChange = (nextStats: GameStats) => {
     setGameStats(nextStats)
@@ -90,10 +194,23 @@ export default function GamePage() {
     return null
   }
 
+  const visibleRules = RULES.filter((rule) => rule.category === activeCategory)
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(255,215,145,0.12),_transparent_28%),linear-gradient(180deg,_#18110c_0%,_#0c0907_100%)] px-4 py-6 text-stone-100 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-5xl flex-col items-center gap-5">
         <header className="relative w-full rounded-[2rem] border border-amber-900/35 bg-[linear-gradient(180deg,_rgba(29,20,13,0.98),_rgba(18,12,8,0.98))] px-6 py-5 text-center shadow-[0_24px_90px_rgba(0,0,0,0.35)] sm:px-8">
+          <button
+            type="button"
+            onClick={() => setShowRules(true)}
+            aria-label="Open rules help"
+            className="absolute right-16 top-4 inline-flex h-11 w-11 items-center justify-center rounded-full border border-stone-700/50 bg-black/25 text-stone-100 transition hover:border-amber-500/50 hover:bg-black/40"
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 18h.01" />
+              <path d="M9.09 9a3 3 0 1 1 5.82 1c0 2-3 2-3 4" />
+            </svg>
+          </button>
           <button
             type="button"
             onClick={handleQuit}
@@ -118,9 +235,7 @@ export default function GamePage() {
           <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center">
             <div className="rounded-full border border-amber-400/20 bg-amber-300/10 px-4 py-2 text-sm text-amber-100">
               <span className="mr-2 align-middle">Turn:</span>
-              <span
-                className={`inline-block h-4 w-4 rounded-full border align-middle transform-gpu ${getTurnOrbClass(gameStats.currentPlayer)}`}
-              />
+              <span className={`inline-block h-4 w-4 rounded-full border align-middle transform-gpu ${getTurnOrbClass(gameStats.currentPlayer)}`} />
             </div>
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-2">
@@ -130,10 +245,7 @@ export default function GamePage() {
                 {Array.from({ length: 10 }).map((_, i) => (
                   <div
                     key={`black-${i}`}
-                    className={`h-4 w-4 rounded-full border transition-all transform-gpu ${getCaptureOrbClass(
-                      i < gameStats.capturesBlack,
-                      'black',
-                    )}`}
+                    className={`h-4 w-4 rounded-full border transition-all transform-gpu ${getCaptureOrbClass(i < gameStats.capturesBlack, 'black')}`}
                   />
                 ))}
               </div>
@@ -144,10 +256,7 @@ export default function GamePage() {
                 {Array.from({ length: 10 }).map((_, i) => (
                   <div
                     key={`white-${i}`}
-                    className={`h-4 w-4 rounded-full border transition-all transform-gpu ${getCaptureOrbClass(
-                      i < gameStats.capturesWhite,
-                      'white',
-                    )}`}
+                    className={`h-4 w-4 rounded-full border transition-all transform-gpu ${getCaptureOrbClass(i < gameStats.capturesWhite, 'white')}`}
                   />
                 ))}
               </div>
@@ -163,6 +272,86 @@ export default function GamePage() {
             <GomokuBoard mode={modeParam} onStatsChange={handleStatsChange} onBotResponseTime={handleBotResponse} />
           </section>
         </div>
+
+        {showRules ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm">
+            <div className="flex max-h-[90vh] w-full max-w-5xl flex-col rounded-[2rem] border border-amber-900/35 bg-[linear-gradient(180deg,_rgba(29,20,13,0.99),_rgba(18,12,8,0.99))] p-5 shadow-[0_30px_120px_rgba(0,0,0,0.55)] sm:p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.5em] text-amber-200/65">In-game help</p>
+                  <h2 className="mt-2 text-2xl font-black tracking-[0.08em] text-amber-100 sm:text-3xl">Rules summary</h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowRules(false)}
+                  className="rounded-full border border-stone-700/50 bg-black/25 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-stone-100 transition hover:border-amber-500/50 hover:bg-black/40"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="mt-5 flex min-h-0 flex-1 gap-4 overflow-hidden">
+                <aside className="hidden w-44 shrink-0 flex-col gap-2 md:flex">
+                  {categories.map((category) => (
+                    <button
+                      key={category}
+                      type="button"
+                      onClick={() => setActiveCategory(category)}
+                      className={`rounded-xl px-3 py-2 text-left text-sm transition ${
+                        activeCategory === category ? 'bg-amber-500/15 text-amber-100' : 'text-stone-300 hover:bg-white/5'
+                      }`}
+                    >
+                      {category}
+                    </button>
+                  ))}
+                </aside>
+
+                <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-1">
+                  <div className="flex flex-wrap gap-2 md:hidden">
+                    {categories.map((category) => (
+                      <button
+                        key={category}
+                        type="button"
+                        onClick={() => setActiveCategory(category)}
+                        className={`rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.25em] transition ${
+                          activeCategory === category ? 'bg-amber-500/15 text-amber-100' : 'border border-stone-700/40 text-stone-300'
+                        }`}
+                      >
+                        {category}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="grid gap-3">
+                    {visibleRules.map((rule) => (
+                      <article key={rule.title} className="rounded-2xl border border-stone-700/40 bg-black/20 p-4">
+                        <h3 className="text-sm font-semibold uppercase tracking-[0.35em] text-amber-200/70">{rule.title}</h3>
+                        <p className="mt-2 text-sm leading-6 text-stone-200 whitespace-pre-line">{rule.text}</p>
+
+                        {rule.showBoard !== false && rule.beforeBoard && rule.afterBoard ? (
+                          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                            <div>
+                              <p className="mb-2 text-[10px] uppercase tracking-[0.35em] text-stone-500">Before</p>
+                              <HelpMiniBoard board={rule.beforeBoard} />
+                            </div>
+                            <div>
+                              <p className="mb-2 text-[10px] uppercase tracking-[0.35em] text-stone-500">After</p>
+                              <HelpMiniBoard board={rule.afterBoard} />
+                            </div>
+                          </div>
+                        ) : null}
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <p className="mt-4 text-sm leading-6 text-stone-400">
+                You can keep this open while playing, then close it and continue the game.
+              </p>
+            </div>
+          </div>
+        ) : null}
       </div>
     </main>
   )

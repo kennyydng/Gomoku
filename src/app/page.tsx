@@ -1,7 +1,7 @@
 "use client"
 
-import Link from 'next/link'
 import { useState } from 'react'
+import Link from 'next/link'
 
 export default function Home() {
   const [selectedMode, setSelectedMode] = useState<'local' | 'ai'>('local')
@@ -44,6 +44,7 @@ export default function Home() {
             <p className="mt-2 text-sm text-stone-400">The bot responds after each player move.</p>
           </Link>
         </section>
+
       </div>
     </main>
   )

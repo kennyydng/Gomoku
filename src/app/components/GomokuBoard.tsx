@@ -23,13 +23,28 @@ const BOARD_SIZE = 19
 const BOARD_RANGE = BOARD_SIZE - 1
 const BOARD_LINE_COLOR = 'rgba(39, 25, 14, 0.72)'
 const BOARD_MARK_COLOR = 'rgba(67, 46, 23, 0.9)'
+const DIRECTIONS = [
+  [0, 1],
+  [1, 0],
+  [1, 1],
+  [1, -1],
+] as const
+const DOUBLE_THREE_PATTERNS = ['0011100', '0101100', '0011010', '0110100', '0100110', '0110010', '0101010']
 
-function createEmptyBoard() {
+export function createEmptyBoard() {
   return Array.from({ length: BOARD_SIZE }, () => Array.from({ length: BOARD_SIZE }, () => 0))
 }
 
 function cloneBoard(board: number[][]) {
   return board.map((row) => [...row])
+}
+
+function isInsideBoard(row: number, col: number) {
+  return row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE
+}
+
+function getOpponent(player: Player) {
+  return player === 1 ? 2 : 1
 }
 
 function getStoneClass(player: Player) {
@@ -42,7 +57,108 @@ function getPreviewClass(player: Player) {
   return player === 1 ? 'bg-black/25' : 'bg-white/35'
 }
 
-function resolveMove(board: number[][], row: number, col: number, player: Player) {
+function getLineCells(board: number[][], row: number, col: number, deltaRow: number, deltaCol: number, player: Player) {
+  const cells: Array<[number, number]> = [[row, col]]
+
+  let nextRow = row + deltaRow
+  let nextCol = col + deltaCol
+
+  while (isInsideBoard(nextRow, nextCol) && board[nextRow][nextCol] === player) {
+    cells.push([nextRow, nextCol])
+    nextRow += deltaRow
+    nextCol += deltaCol
+  }
+
+  nextRow = row - deltaRow
+  nextCol = col - deltaCol
+
+  while (isInsideBoard(nextRow, nextCol) && board[nextRow][nextCol] === player) {
+    cells.unshift([nextRow, nextCol])
+    nextRow -= deltaRow
+    nextCol -= deltaCol
+  }
+
+  return cells
+}
+
+function canBreakLineByCapture(board: number[][], lineCells: Array<[number, number]>, opponent: Player) {
+  const lineKeySet = new Set(lineCells.map(([lineRow, lineCol]) => `${lineRow}:${lineCol}`))
+
+  for (let row = 0; row < BOARD_SIZE; row += 1) {
+    for (let col = 0; col < BOARD_SIZE; col += 1) {
+      if (board[row][col] !== 0) {
+        continue
+      }
+
+      const nextBoard = cloneBoard(board)
+      nextBoard[row][col] = opponent
+      const capturedCells = countCaptures(nextBoard, row, col, opponent)
+
+      if (capturedCells.some(([capturedRow, capturedCol]) => lineKeySet.has(`${capturedRow}:${capturedCol}`))) {
+        return true
+      }
+    }
+  }
+
+  return false
+}
+
+export function hasAlignmentWin(board: number[][], row: number, col: number, player: Player) {
+  const opponent = getOpponent(player)
+
+  for (const [deltaRow, deltaCol] of DIRECTIONS) {
+    const lineCells = getLineCells(board, row, col, deltaRow, deltaCol, player)
+
+    if (lineCells.length < 5) {
+      continue
+    }
+
+    if (!canBreakLineByCapture(board, lineCells, opponent)) {
+      return true
+    }
+  }
+
+  return false
+}
+
+function getDirectionPattern(board: number[][], row: number, col: number, deltaRow: number, deltaCol: number, player: Player) {
+  const pattern: string[] = []
+
+  for (let offset = -4; offset <= 4; offset += 1) {
+    const currentRow = row + deltaRow * offset
+    const currentCol = col + deltaCol * offset
+
+    if (!isInsideBoard(currentRow, currentCol)) {
+      pattern.push('2')
+      continue
+    }
+
+    if (board[currentRow][currentCol] === 0) {
+      pattern.push('0')
+      continue
+    }
+
+    pattern.push(board[currentRow][currentCol] === player ? '1' : '2')
+  }
+
+  return pattern.join('')
+}
+
+function createsDoubleThree(board: number[][], row: number, col: number, player: Player) {
+  let openThreeCount = 0
+
+  for (const [deltaRow, deltaCol] of DIRECTIONS) {
+    const pattern = getDirectionPattern(board, row, col, deltaRow, deltaCol, player)
+
+    if (DOUBLE_THREE_PATTERNS.some((candidate) => pattern.includes(candidate))) {
+      openThreeCount += 1
+    }
+  }
+
+  return openThreeCount >= 2
+}
+
+export function resolveMove(board: number[][], row: number, col: number, player: Player) {
   if (board[row][col] !== 0) {
     return null
   }
@@ -51,6 +167,11 @@ function resolveMove(board: number[][], row: number, col: number, player: Player
   nextBoard[row][col] = player
 
   const capturedCells = countCaptures(nextBoard, row, col, player)
+  const capturedPairs = Math.floor(capturedCells.length / 2)
+
+  if (capturedPairs === 0 && createsDoubleThree(nextBoard, row, col, player)) {
+    return null
+  }
 
   for (const [capturedRow, capturedCol] of capturedCells) {
     nextBoard[capturedRow][capturedCol] = 0
@@ -58,21 +179,15 @@ function resolveMove(board: number[][], row: number, col: number, player: Player
 
   return {
     board: nextBoard,
-    capturedPairs: Math.floor(capturedCells.length / 2),
+    capturedPairs,
   }
 }
 
 function countCaptures(board: number[][], row: number, col: number, player: Player) {
-  const opponent: Player = player === 1 ? 2 : 1
-  const directions = [
-    [0, 1],
-    [1, 0],
-    [1, 1],
-    [1, -1],
-  ] as const
+  const opponent = getOpponent(player)
   const capturedCells: Array<[number, number]> = []
 
-  for (const [deltaRow, deltaCol] of directions) {
+  for (const [deltaRow, deltaCol] of DIRECTIONS) {
     const forwardRow1 = row + deltaRow
     const forwardCol1 = col + deltaCol
     const forwardRow2 = row + deltaRow * 2
@@ -152,26 +267,30 @@ function GomokuBoard({ mode, onStatsChange, onBotResponseTime }: GomokuBoardProp
   }, [onStatsChange, stats])
 
   useEffect(() => {
-    if (capturesBlack >= 10) {
-      setWinner(1)
-    } else if (capturesWhite >= 10) {
-      setWinner(2)
-    }
-  }, [capturesBlack, capturesWhite])
-
-  useEffect(() => {
     setHoveredCell(null)
   }, [mode])
 
-  const applyResolvedMove = (move: { board: number[][]; capturedPairs: number }, player: Player) => {
-    setBoard(move.board)
+  const applyResolvedMove = (
+    move: { board: number[][]; capturedPairs: number },
+    player: Player,
+    row: number,
+    col: number,
+    baseCapturesBlack = capturesBlack,
+    baseCapturesWhite = capturesWhite,
+  ) => {
+    const nextCapturesBlack = baseCapturesBlack + (player === 1 ? move.capturedPairs * 2 : 0)
+    const nextCapturesWhite = baseCapturesWhite + (player === 2 ? move.capturedPairs * 2 : 0)
+    const nextWinner = hasAlignmentWin(move.board, row, col, player) ? player : boardHasWinner(nextCapturesBlack, nextCapturesWhite)
 
-    if (move.capturedPairs > 0) {
-      if (player === 1) {
-        setCapturesBlack((value) => value + move.capturedPairs * 2)
-      } else {
-        setCapturesWhite((value) => value + move.capturedPairs * 2)
-      }
+    setBoard(move.board)
+    setCapturesBlack(nextCapturesBlack)
+    setCapturesWhite(nextCapturesWhite)
+    setWinner(nextWinner)
+
+    return {
+      winner: nextWinner,
+      capturesBlack: nextCapturesBlack,
+      capturesWhite: nextCapturesWhite,
     }
   }
 
@@ -189,7 +308,11 @@ function GomokuBoard({ mode, onStatsChange, onBotResponseTime }: GomokuBoardProp
       return
     }
 
-    applyResolvedMove(humanMove, humanPlayer)
+    const humanOutcome = applyResolvedMove(humanMove, humanPlayer, row, col)
+
+    if (humanOutcome.winner !== null) {
+      return
+    }
 
     if (mode === 'local') {
       setCurrentPlayer(aiPlayer)
@@ -239,7 +362,12 @@ function GomokuBoard({ mode, onStatsChange, onBotResponseTime }: GomokuBoardProp
         return
       }
 
-      applyResolvedMove(aiMove, aiPlayer)
+      const aiOutcome = applyResolvedMove(aiMove, aiPlayer, data.row, data.col, humanOutcome.capturesBlack, humanOutcome.capturesWhite)
+
+      if (aiOutcome.winner !== null) {
+        return
+      }
+
       setCurrentPlayer(humanPlayer)
     } catch {
       onBotResponseTime?.(500)
