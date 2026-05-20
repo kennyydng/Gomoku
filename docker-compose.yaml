@@ -1,0 +1,20 @@
+
+services:
+  gomoku:
+    build:
+      dockerfile_inline: |
+        FROM swipl:10.1.5
+        USER root
+        RUN apt-get update
+        RUN apt-get install -y npm
+        COPY app /var/www/app
+        COPY bot /var/www/app/bot
+        WORKDIR /var/www/app
+        RUN npm ci
+    entrypoint: [npm,run,dev]
+    ports: [3000:3000]
+    develop:
+      watch:
+        - action: sync
+          path: bot
+          target: /var/www/app/bot
