@@ -47,6 +47,7 @@ export default function GamePage() {
     currentPlayer: 1,
     isLocked: false,
     winner: null,
+    isDraw: false,
   })
 
   const categories = useMemo(() => ['Victory', 'Capture', 'Forbidden'] as const, [])

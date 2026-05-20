@@ -19,6 +19,7 @@ export interface GameStats {
   currentPlayer: Player
   isLocked: boolean
   winner: Player | null
+  isDraw: boolean
 }
 
 interface UseGomokuGameArgs {
@@ -248,6 +249,7 @@ export function useGomokuGame({ mode, onStatsChange, onBotResponseTime }: UseGom
   const [hoveredCell, setHoveredCell] = useState<{ row: number; col: number } | null>(null)
   const [isLocked, setIsLocked] = useState(false)
   const [winner, setWinner] = useState<Player | null>(null)
+  const [isDraw, setIsDraw] = useState(false)
   const [history, setHistory] = useState<GameSnapshot[]>([])
 
   const stats = useMemo<GameStats>(
@@ -257,6 +259,7 @@ export function useGomokuGame({ mode, onStatsChange, onBotResponseTime }: UseGom
       currentPlayer,
       isLocked,
       winner,
+      isDraw,
     }),
     [capturesBlack, capturesWhite, currentPlayer, isLocked, winner],
   )
@@ -273,6 +276,7 @@ export function useGomokuGame({ mode, onStatsChange, onBotResponseTime }: UseGom
     setCapturesWhite(0)
     setIsLocked(false)
     setWinner(null)
+    setIsDraw(false)
     setHistory([])
     onBotResponseTime?.(null)
   }, [mode])
@@ -291,9 +295,21 @@ export function useGomokuGame({ mode, onStatsChange, onBotResponseTime }: UseGom
     setCapturesBlack(snapshot.capturesBlack)
     setCapturesWhite(snapshot.capturesWhite)
     setWinner(snapshot.winner)
+    setIsDraw(false)
     setHoveredCell(null)
     setIsLocked(false)
     onBotResponseTime?.(null)
+  }
+
+  function hasAnyLegalMove(boardToCheck: number[][]) {
+    for (let r = 0; r < BOARD_SIZE; r += 1) {
+      for (let c = 0; c < BOARD_SIZE; c += 1) {
+        if (boardToCheck[r][c] !== 0) continue
+        if (resolveMove(boardToCheck, r, c, 1) !== null) return true
+        if (resolveMove(boardToCheck, r, c, 2) !== null) return true
+      }
+    }
+    return false
   }
 
   const applyResolvedMove = (
@@ -312,6 +328,9 @@ export function useGomokuGame({ mode, onStatsChange, onBotResponseTime }: UseGom
     setCapturesBlack(nextCapturesBlack)
     setCapturesWhite(nextCapturesWhite)
     setWinner(nextWinner)
+    // detect draw: no legal moves remain for either player
+    const draw = !hasAnyLegalMove(move.board)
+    setIsDraw(draw)
 
     return {
       winner: nextWinner,
@@ -335,6 +354,18 @@ export function useGomokuGame({ mode, onStatsChange, onBotResponseTime }: UseGom
     // In training, that means undoing after the bot answered rewinds both moves at once.
     restoreSnapshot(snapshot)
     setHistory((previousHistory) => previousHistory.slice(0, -1))
+  }
+
+  const resetGame = () => {
+    setBoard(createEmptyBoard())
+    setCurrentPlayer(1)
+    setCapturesBlack(0)
+    setCapturesWhite(0)
+    setIsLocked(false)
+    setWinner(null)
+    setIsDraw(false)
+    setHistory([])
+    onBotResponseTime?.(null)
   }
 
   const handleHumanMove = async (row: number, col: number) => {
@@ -434,5 +465,7 @@ export function useGomokuGame({ mode, onStatsChange, onBotResponseTime }: UseGom
     isLocked,
     setHoveredCell,
     winner,
+    isDraw,
+    resetGame,
   }
 }
