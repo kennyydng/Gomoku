@@ -29,13 +29,13 @@ function createHelpBoard(stones: Array<{ row: number; col: number; player: Playe
 
 const RULES: Rule[] = [
   {
-    title: 'Victory',
+    title: 'Victory Rules',
     category: 'Victory',
     text: '• Align 5 or more stones of your color continuously to win.\n• A line of 6 or more also counts as a win.\n• If an alignment can be immediately broken by capture, it does not count as a win.\n• Capturing 10 opponent stones also wins the game.',
     showBoard: false,
   },
   {
-    title: 'Capture',
+    title: 'Capture Rules',
     category: 'Capture',
     text: 'You capture a pair of opponent stones by flanking them on both sides with your stones. The two captured stones are removed from the board, freeing the intersections.',
     showBoard: true,
@@ -50,7 +50,7 @@ const RULES: Rule[] = [
     ]),
   },
   {
-    title: 'Forbidden',
+    title: 'Forbidden Moves',
     category: 'Forbidden',
     text: "A move that simultaneously creates two 'free-threes' is illegal, unless that same move captures a pair immediately.",
     showBoard: true,
@@ -89,7 +89,7 @@ function getCaptureOrbClass(isFilled: boolean, tone: 'black' | 'white') {
 }
 
 function getGaugeLabel(tone: 'black' | 'white', mode: GameMode) {
-  if (mode === 'ai') {
+  if (mode !== 'local') {
     return tone === 'black' ? 'Player' : 'Bot'
   }
 
@@ -124,7 +124,8 @@ function HelpMiniBoard({ board }: { board: number[][] }) {
 export default function GamePage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const modeParam = searchParams?.get('mode') as GameMode | null
+  const modeParamValue = searchParams?.get('mode')
+  const modeParam = modeParamValue === 'local' || modeParamValue === 'ai' || modeParamValue === 'training' ? modeParamValue : null
   const [botResponseMs, setBotResponseMs] = useState<number | null>(null)
   const [showRules, setShowRules] = useState(false)
   const [activeCategory, setActiveCategory] = useState<Rule['category']>('Victory')
@@ -179,7 +180,7 @@ export default function GamePage() {
     setGameStats(nextStats)
   }
 
-  const handleBotResponse = (ms: number) => {
+  const handleBotResponse = (ms: number | null) => {
     setBotResponseMs(ms)
   }
 
@@ -261,7 +262,7 @@ export default function GamePage() {
                 ))}
               </div>
             </div>
-            {modeParam === 'ai' ? (
+            {modeParam !== 'local' ? (
               <div className="rounded-full border border-amber-400/20 bg-amber-300/10 px-4 py-2 text-sm text-amber-100">
                 Bot response: {botResponseMs === null ? '...' : `${botResponseMs} ms`}
               </div>

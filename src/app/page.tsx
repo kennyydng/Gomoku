@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 
 export default function Home() {
-  const [selectedMode, setSelectedMode] = useState<'local' | 'ai'>('local')
+  const [selectedMode, setSelectedMode] = useState<'local' | 'ai' | 'training'>('local')
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(255,215,145,0.16),_transparent_28%),linear-gradient(180deg,_#1a120d_0%,_#0c0907_100%)] px-4 py-10 text-stone-100 sm:px-6 lg:px-8">
@@ -17,7 +17,7 @@ export default function Home() {
           <p className="text-sm text-stone-300 sm:text-base">Ninuki-Gomoku - Board 19x19</p>
         </header>
 
-        <section className="grid w-full gap-4 grid-cols-1">
+        <section className="grid gap-4 grid-cols-1">
           <Link
             href="/game?mode=local"
             onClick={() => setSelectedMode('local')}
@@ -41,7 +41,20 @@ export default function Home() {
             }`}
           >
             <div className="text-lg font-semibold text-amber-50">Player vs Bot</div>
-            <p className="mt-2 text-sm text-stone-400">The bot responds after each player move.</p>
+            <p className="mt-2 text-sm text-stone-400">The bot responds after each player move. Good luck !</p>
+          </Link>
+
+          <Link
+            href="/game?mode=training"
+            onClick={() => setSelectedMode('training')}
+            className={`rounded-2xl border p-6 text-left transition ${
+              selectedMode === 'training'
+                ? 'border-amber-300 bg-amber-200/10 shadow-[0_0_0_1px_rgba(252,211,77,0.16)]'
+                : 'border-stone-700/40 bg-[#120d09] hover:border-amber-700/50'
+            }`}
+          >
+            <div className="text-lg font-semibold text-amber-50">Training Mode</div>
+            <p className="mt-2 text-sm text-stone-400">Play against the bot with suggested moves. You can undo the last actions to review variations.</p>
           </Link>
         </section>
 

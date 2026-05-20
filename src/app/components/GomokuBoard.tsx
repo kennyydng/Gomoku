@@ -2,8 +2,16 @@
 
 import { memo, useEffect, useMemo, useState } from 'react'
 
-export type GameMode = 'local' | 'ai'
+export type GameMode = 'local' | 'ai' | 'training'
 type Player = 1 | 2
+
+type GameSnapshot = {
+  board: number[][]
+  currentPlayer: Player
+  capturesBlack: number
+  capturesWhite: number
+  winner: Player | null
+}
 
 export interface GameStats {
   capturesBlack: number
@@ -16,7 +24,7 @@ export interface GameStats {
 interface GomokuBoardProps {
   mode: GameMode
   onStatsChange?: (stats: GameStats) => void
-  onBotResponseTime?: (ms: number) => void
+  onBotResponseTime?: (ms: number | null) => void
 }
 
 const BOARD_SIZE = 19
@@ -250,6 +258,7 @@ function GomokuBoard({ mode, onStatsChange, onBotResponseTime }: GomokuBoardProp
   const [hoveredCell, setHoveredCell] = useState<{ row: number; col: number } | null>(null)
   const [isLocked, setIsLocked] = useState(false)
   const [winner, setWinner] = useState<Player | null>(null)
+  const [history, setHistory] = useState<GameSnapshot[]>([])
 
   const stats = useMemo<GameStats>(
     () => ({
@@ -268,7 +277,60 @@ function GomokuBoard({ mode, onStatsChange, onBotResponseTime }: GomokuBoardProp
 
   useEffect(() => {
     setHoveredCell(null)
+    setBoard(createEmptyBoard())
+    setCurrentPlayer(1)
+    setCapturesBlack(0)
+    setCapturesWhite(0)
+    setIsLocked(false)
+    setWinner(null)
+    setHistory([])
+    onBotResponseTime?.(null)
   }, [mode])
+
+  const createSnapshot = (
+    nextBoard: number[][],
+    nextCurrentPlayer: Player,
+    nextCapturesBlack: number,
+    nextCapturesWhite: number,
+    nextWinner: Player | null,
+  ): GameSnapshot => ({
+    board: cloneBoard(nextBoard),
+    currentPlayer: nextCurrentPlayer,
+    capturesBlack: nextCapturesBlack,
+    capturesWhite: nextCapturesWhite,
+    winner: nextWinner,
+  })
+
+  const restoreSnapshot = (snapshot: GameSnapshot) => {
+    setBoard(snapshot.board)
+    setCurrentPlayer(snapshot.currentPlayer)
+    setCapturesBlack(snapshot.capturesBlack)
+    setCapturesWhite(snapshot.capturesWhite)
+    setWinner(snapshot.winner)
+    setHoveredCell(null)
+    setIsLocked(false)
+    onBotResponseTime?.(null)
+  }
+
+  const pushHistorySnapshot = () => {
+    setHistory((previousHistory) => [...previousHistory, createSnapshot(board, currentPlayer, capturesBlack, capturesWhite, winner)])
+  }
+
+  const handleUndo = () => {
+    if (mode !== 'training' || isLocked || history.length === 0) {
+      return
+    }
+
+    const stepsToUndo = history.length >= 2 ? 2 : 1
+    const snapshot = history[history.length - stepsToUndo]
+
+    if (!snapshot) {
+      return
+    }
+
+    restoreSnapshot(snapshot)
+    setHistory((previousHistory) => previousHistory.slice(0, -stepsToUndo))
+  }
 
   const applyResolvedMove = (
     move: { board: number[][]; capturedPairs: number },
@@ -307,6 +369,8 @@ function GomokuBoard({ mode, onStatsChange, onBotResponseTime }: GomokuBoardProp
     if (!humanMove) {
       return
     }
+
+    pushHistorySnapshot()
 
     const humanOutcome = applyResolvedMove(humanMove, humanPlayer, row, col)
 
@@ -362,6 +426,11 @@ function GomokuBoard({ mode, onStatsChange, onBotResponseTime }: GomokuBoardProp
         return
       }
 
+      setHistory((previousHistory) => [
+        ...previousHistory,
+        createSnapshot(humanMove.board, aiPlayer, humanOutcome.capturesBlack, humanOutcome.capturesWhite, humanOutcome.winner),
+      ])
+
       const aiOutcome = applyResolvedMove(aiMove, aiPlayer, data.row, data.col, humanOutcome.capturesBlack, humanOutcome.capturesWhite)
 
       if (aiOutcome.winner !== null) {
@@ -399,6 +468,18 @@ function GomokuBoard({ mode, onStatsChange, onBotResponseTime }: GomokuBoardProp
   return (
     <div className="w-full">
       <div className="relative mx-auto w-full max-w-[min(88vmin,76vh,720px)] sm:max-w-[min(84vmin,72vh,680px)]">
+        {mode === 'training' ? (
+          <div className="mb-3 flex justify-end">
+            <button
+              type="button"
+              onClick={handleUndo}
+              disabled={history.length === 0 || isLocked}
+              className="rounded-full border border-amber-400/20 bg-amber-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-amber-100 transition hover:border-amber-400/40 hover:bg-amber-300/15 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Undo last move
+            </button>
+          </div>
+        ) : null}
         <div className="relative aspect-square rounded-[1.8rem] border border-amber-800/45 bg-[linear-gradient(135deg,_#c79b63_0%,_#b8834a_44%,_#8e5b30_100%)] p-[clamp(10px,1.6vw,18px)] shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_24px_80px_rgba(0,0,0,0.35)]">
           <div className="relative h-full w-full rounded-[1.1rem] bg-[radial-gradient(circle_at_top,_rgba(255,245,220,0.18),_transparent_32%),linear-gradient(180deg,_rgba(255,235,197,0.12),_rgba(255,235,197,0.02))]">
             <svg aria-hidden="true" className="absolute inset-0 h-full w-full">
