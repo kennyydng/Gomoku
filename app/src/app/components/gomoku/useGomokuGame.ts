@@ -38,8 +38,6 @@ const DIRECTIONS = [
   [1, -1],
 ] as const
 
-const DOUBLE_THREE_PATTERNS = ['0011100', '0101100', '0011010', '0110100', '0100110', '0110010', '0101010']
-
 function createEmptyBoard() {
   return Array.from({ length: BOARD_SIZE }, () => Array.from({ length: BOARD_SIZE }, () => 0))
 }
@@ -167,41 +165,113 @@ function hasAlignmentWin(board: number[][], row: number, col: number, player: Pl
   return false
 }
 
-function getDirectionPattern(board: number[][], row: number, col: number, deltaRow: number, deltaCol: number, player: Player) {
-  const pattern: string[] = []
+function isOpenFourOnDirection(
+  board: number[][],
+  anchorRow: number,
+  anchorCol: number,
+  extensionRow: number,
+  extensionCol: number,
+  player: Player,
+  deltaRow: number,
+  deltaCol: number,
+) {
+  for (let startOffset = -3; startOffset <= 0; startOffset += 1) {
+    const segment: Array<[number, number]> = []
 
-  for (let offset = -4; offset <= 4; offset += 1) {
-    const currentRow = row + deltaRow * offset
-    const currentCol = col + deltaCol * offset
+    for (let i = 0; i < 4; i += 1) {
+      const r = anchorRow + (startOffset + i) * deltaRow
+      const c = anchorCol + (startOffset + i) * deltaCol
 
-    if (!isInsideBoard(currentRow, currentCol)) {
-      pattern.push('2')
+      if (!isInsideBoard(r, c) || board[r][c] !== player) {
+        segment.length = 0
+        break
+      }
+
+      segment.push([r, c])
+    }
+
+    if (segment.length !== 4) {
       continue
     }
 
-    if (board[currentRow][currentCol] === 0) {
-      pattern.push('0')
+    const containsAnchor = segment.some(([r, c]) => r === anchorRow && c === anchorCol)
+    const containsExtension = segment.some(([r, c]) => r === extensionRow && c === extensionCol)
+
+    if (!containsAnchor || !containsExtension) {
       continue
     }
 
-    pattern.push(board[currentRow][currentCol] === player ? '1' : '2')
+    const beforeRow = anchorRow + (startOffset - 1) * deltaRow
+    const beforeCol = anchorCol + (startOffset - 1) * deltaCol
+    const afterRow = anchorRow + (startOffset + 4) * deltaRow
+    const afterCol = anchorCol + (startOffset + 4) * deltaCol
+
+    if (!isInsideBoard(beforeRow, beforeCol) || !isInsideBoard(afterRow, afterCol)) {
+      continue
+    }
+
+    if (board[beforeRow][beforeCol] === 0 && board[afterRow][afterCol] === 0) {
+      return true
+    }
   }
 
-  return pattern.join('')
+  return false
+}
+
+function isFreeThreeOnDirection(board: number[][], row: number, col: number, player: Player, deltaRow: number, deltaCol: number) {
+  for (let offset = -4; offset <= 4; offset += 1) {
+    if (offset === 0) {
+      continue
+    }
+
+    const extensionRow = row + offset * deltaRow
+    const extensionCol = col + offset * deltaCol
+
+    if (!isInsideBoard(extensionRow, extensionCol) || board[extensionRow][extensionCol] !== 0) {
+      continue
+    }
+
+    const extensionBoard = cloneBoard(board)
+    extensionBoard[extensionRow][extensionCol] = player
+
+    if (isOpenFourOnDirection(extensionBoard, row, col, extensionRow, extensionCol, player, deltaRow, deltaCol)) {
+      return true
+    }
+  }
+
+  return false
 }
 
 function createsDoubleThree(board: number[][], row: number, col: number, player: Player) {
-  let openThreeCount = 0
+  let freeThreeLines = 0
 
   for (const [deltaRow, deltaCol] of DIRECTIONS) {
-    const pattern = getDirectionPattern(board, row, col, deltaRow, deltaCol, player)
-
-    if (DOUBLE_THREE_PATTERNS.some((candidate) => pattern.includes(candidate))) {
-      openThreeCount += 1
+    if (isFreeThreeOnDirection(board, row, col, player, deltaRow, deltaCol)) {
+      freeThreeLines += 1
     }
   }
 
-  return openThreeCount >= 2
+  return freeThreeLines >= 2
+}
+
+function getForbiddenCells(board: number[][], player: Player) {
+  const forbidden = new Set<string>()
+
+  for (let row = 0; row < BOARD_SIZE; row += 1) {
+    for (let col = 0; col < BOARD_SIZE; col += 1) {
+      if (board[row][col] !== 0) {
+        continue
+      }
+
+      const move = resolveMove(board, row, col, player)
+
+      if (!move) {
+        forbidden.add(`${row}:${col}`)
+      }
+    }
+  }
+
+  return forbidden
 }
 
 function resolveMove(board: number[][], row: number, col: number, player: Player) {
@@ -261,7 +331,7 @@ export function useGomokuGame({ mode, onStatsChange, onBotResponseTime }: UseGom
       winner,
       isDraw,
     }),
-    [capturesBlack, capturesWhite, currentPlayer, isLocked, winner],
+    [capturesBlack, capturesWhite, currentPlayer, isLocked, winner, isDraw],
   )
 
   useEffect(() => {
@@ -458,6 +528,7 @@ export function useGomokuGame({ mode, onStatsChange, onBotResponseTime }: UseGom
     capturesBlack,
     capturesWhite,
     currentPlayer,
+    forbiddenCells: getForbiddenCells(board, currentPlayer),
     handleHumanMove,
     handleUndo,
     hoveredCell,

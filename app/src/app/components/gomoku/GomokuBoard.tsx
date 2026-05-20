@@ -25,6 +25,7 @@ function GomokuBoard({ mode, onStatsChange, onBotResponseTime }: GomokuBoardProp
     setHoveredCell,
     isDraw,
     resetGame,
+    forbiddenCells,
   } = useGomokuGame({ mode, onStatsChange, onBotResponseTime })
 
   const winnerLabel =
@@ -61,6 +62,7 @@ function GomokuBoard({ mode, onStatsChange, onBotResponseTime }: GomokuBoardProp
             hoveredCell={hoveredCell}
             isLocked={isLocked}
             winner={winner}
+            forbiddenCells={forbiddenCells}
             onCellHover={setHoveredCell}
             onCellClick={(row, col) => void handleHumanMove(row, col)}
           />

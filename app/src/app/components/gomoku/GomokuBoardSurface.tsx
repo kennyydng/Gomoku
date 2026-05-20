@@ -22,11 +22,12 @@ interface GomokuBoardSurfaceProps {
   hoveredCell: { row: number; col: number } | null
   isLocked: boolean
   winner: Player | null
+  forbiddenCells: Set<string>
   onCellHover: (cell: { row: number; col: number } | null) => void
   onCellClick: (row: number, col: number) => void
 }
 
-function GomokuBoardSurface({ board, currentPlayer, hoveredCell, isLocked, winner, onCellHover, onCellClick }: GomokuBoardSurfaceProps) {
+function GomokuBoardSurface({ board, currentPlayer, hoveredCell, isLocked, winner, forbiddenCells, onCellHover, onCellClick }: GomokuBoardSurfaceProps) {
   const boardLineOverlay = useMemo(() => {
     const lines = []
 
@@ -105,6 +106,19 @@ function GomokuBoardSurface({ board, currentPlayer, hoveredCell, isLocked, winne
                     <span
                       className={`absolute inset-0 block rounded-full opacity-75 blur-[0.2px] ${getPreviewClass(currentPlayer)}`}
                       style={{ width: stoneSize, height: stoneSize, left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
+                    />
+                  ) : null}
+                  {forbiddenCells.has(`${row}:${col}`) && cell === 0 ? (
+                    <span
+                      className="absolute inset-0 block rounded-full opacity-40"
+                      style={{
+                        width: stoneSize,
+                        height: stoneSize,
+                        left: '50%',
+                        top: '50%',
+                        transform: 'translate(-50%, -50%)',
+                        background: 'radial-gradient(circle at 30% 30%, #ff6b6b, #c92a2a)',
+                      }}
                     />
                   ) : null}
                 </button>

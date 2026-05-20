@@ -1,12 +1,13 @@
 "use client"
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
-const HELP_BOARD_SIZE = 5
+const HELP_BOARD_SIZE = 7
 
 type Player = 1 | 2
+type HelpStone = Player | 3 | 4 | 5
 
-export function createHelpBoard(stones: Array<{ row: number; col: number; player: Player }>) {
+export function createHelpBoard(stones: Array<{ row: number; col: number; player: HelpStone }>) {
   const board = Array.from({ length: HELP_BOARD_SIZE }, () => Array.from({ length: HELP_BOARD_SIZE }, () => 0))
 
   for (const stone of stones) {
@@ -18,11 +19,13 @@ export function createHelpBoard(stones: Array<{ row: number; col: number; player
 
 export type Rule = {
   title: string
-  category: 'Victory' | 'Capture' | 'Forbidden'
+  category: 'Victory' | 'Capture' | 'Forbidden' | 'Free-three'
   text: string
   showBoard?: boolean
   beforeBoard?: number[][]
   afterBoard?: number[][]
+  beforeLabel?: string
+  afterLabel?: string
 }
 
 export const RULES: Rule[] = [
@@ -41,6 +44,7 @@ export const RULES: Rule[] = [
       { row: 2, col: 0, player: 1 },
       { row: 2, col: 1, player: 2 },
       { row: 2, col: 2, player: 2 },
+      { row: 2, col: 3, player: 3 },
     ]),
     afterBoard: createHelpBoard([
       { row: 2, col: 0, player: 1 },
@@ -48,22 +52,43 @@ export const RULES: Rule[] = [
     ]),
   },
   {
+    title: 'What is a free-three?',
+    category: 'Free-three',
+    text: 'A free-three is an alignement of three stones that, if not immediately blocked, allows for an indefendable alignment of four stones (that’s to say an alignment of four stones with two unobstructed extremities). Both are free-threes:',
+    showBoard: true,
+    beforeLabel: 'Case 1',
+    beforeBoard: createHelpBoard([
+      { row: 3, col: 3, player: 1 },
+      { row: 3, col: 4, player: 1 },
+      { row: 3, col: 5, player: 1 },
+    ]),
+    afterLabel: 'Case 2',
+    afterBoard: createHelpBoard([
+      { row: 3, col: 2, player: 1 },
+      { row: 3, col: 4, player: 1 },
+      { row: 3, col: 5, player: 1 },
+    ]),
+  },
+  {
     title: 'Forbidden Moves',
     category: 'Forbidden',
-    text: "A move that simultaneously creates two 'free-threes' is illegal, unless that same move captures a pair immediately.",
+    text: "A double-three is a move that introduces two simultaneous free-three alignments. You can’t block a double-three. But if that move captures a pair immediately, it is allowed.",
     showBoard: true,
+    beforeLabel: 'Case 1',
     beforeBoard: createHelpBoard([
-      { row: 2, col: 0, player: 1 },
-      { row: 2, col: 1, player: 1 },
-      { row: 1, col: 2, player: 1 },
+      { row: 3, col: 1, player: 1 },
       { row: 3, col: 2, player: 1 },
+      { row: 2, col: 3, player: 1 },
+      { row: 4, col: 3, player: 1 },
+      { row: 3, col: 3, player: 5 },
     ]),
+    afterLabel: 'Case 2',
     afterBoard: createHelpBoard([
-      { row: 2, col: 0, player: 1 },
-      { row: 2, col: 1, player: 1 },
-      { row: 2, col: 2, player: 1 },
-      { row: 1, col: 2, player: 1 },
-      { row: 3, col: 2, player: 1 },
+        { row: 1, col: 1, player: 1 },
+        { row: 2, col: 2, player: 1 },
+        { row: 4, col: 4, player: 5 },
+        { row: 4, col: 5, player: 1 },
+        { row: 4, col: 6, player: 1 },
     ]),
   },
 ]
@@ -73,7 +98,7 @@ function HelpMiniBoard({ board }: { board: number[][] }) {
   return (
     <div
       className="grid aspect-square w-full max-w-[170px] border border-amber-900/35 bg-[linear-gradient(135deg,_#c79b63_0%,_#b8834a_44%,_#8e5b30_100%)] p-1.5 shadow-[0_12px_28px_rgba(0,0,0,0.28)]"
-      style={{ gridTemplateColumns: 'repeat(5, minmax(0, 1fr))' }}
+      style={{ gridTemplateColumns: `repeat(${board.length}, minmax(0, 1fr))` }}
     >
       {board.map((row, rowIndex) =>
         row.map((cell, colIndex) => (
@@ -81,10 +106,13 @@ function HelpMiniBoard({ board }: { board: number[][] }) {
             {cell !== 0 ? (
               <span
                 className={`h-[60%] w-[60%] rounded-full border ${
-                  cell === 1
+                  cell === 5
+                    ? 'border-red-600/40 bg-[radial-gradient(circle_at_30%_30%,_#ff6b6b_0%,_#c92a2a_100%)] shadow-[0_4px_8px_rgba(0,0,0,0.3)]'
+                    : cell === 1 || cell === 3
                     ? 'border-stone-700/60 bg-[radial-gradient(circle_at_30%_30%,_#8f8f8f_0%,_#232323_52%,_#050505_100%)] shadow-[inset_0_3px_5px_rgba(255,255,255,0.18),0_8px_12px_rgba(0,0,0,0.5)] ring-1 ring-black/15'
                     : 'border-stone-300/70 bg-[radial-gradient(circle_at_30%_30%,_#ffffff_0%,_#ece4d7_50%,_#a89475_100%)] shadow-[inset_0_3px_5px_rgba(255,255,255,0.5),0_8px_12px_rgba(0,0,0,0.32)] ring-1 ring-white/20'
                 }`}
+                style={{ opacity: cell === 3 || cell === 4 ? 0.35 : cell === 5 ? 0.4 : 1 }}
               />
             ) : null}
           </div>
@@ -96,7 +124,17 @@ function HelpMiniBoard({ board }: { board: number[][] }) {
 
 export default function HelpModal({ show, onClose, rules }: { show: boolean; onClose: () => void; rules: Rule[] }) {
   const [activeCategory, setActiveCategory] = useState<Rule['category']>('Victory')
-  const categories = useMemo(() => ['Victory', 'Capture', 'Forbidden'] as const, [])
+  const categories = useMemo(() => Array.from(new Set(rules.map((rule) => rule.category))), [rules])
+
+  useEffect(() => {
+    if (categories.length === 0) {
+      return
+    }
+
+    if (!categories.includes(activeCategory)) {
+      setActiveCategory(categories[0])
+    }
+  }, [activeCategory, categories])
 
   if (!show) return null
 
@@ -160,11 +198,11 @@ export default function HelpModal({ show, onClose, rules }: { show: boolean; onC
                   {rule.showBoard !== false && rule.beforeBoard && rule.afterBoard ? (
                     <div className="mt-4 grid gap-3 sm:grid-cols-2">
                       <div>
-                        <p className="mb-2 text-[10px] uppercase tracking-[0.35em] text-stone-500">Before</p>
+                        <p className="mb-2 text-[10px] uppercase tracking-[0.35em] text-stone-500">{rule.beforeLabel ?? 'Before'}</p>
                         <HelpMiniBoard board={rule.beforeBoard} />
                       </div>
                       <div>
-                        <p className="mb-2 text-[10px] uppercase tracking-[0.35em] text-stone-500">After</p>
+                        <p className="mb-2 text-[10px] uppercase tracking-[0.35em] text-stone-500">{rule.afterLabel ?? 'After'}</p>
                         <HelpMiniBoard board={rule.afterBoard} />
                       </div>
                     </div>
