@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { MENU_CARD_THEME } from './constants/ui'
 
 export default function Home() {
   const [selectedMode, setSelectedMode] = useState<'local' | 'ai' | 'training'>('local')
@@ -21,10 +22,10 @@ export default function Home() {
           <Link
             href="/game?mode=local"
             onClick={() => setSelectedMode('local')}
-            className={`rounded-2xl border p-6 text-left transition ${
+            className={`${MENU_CARD_THEME.base} ${
               selectedMode === 'local'
-                ? 'border-amber-300 bg-amber-200/10 shadow-[0_0_0_1px_rgba(252,211,77,0.16)]'
-                : 'border-stone-700/40 bg-[#120d09] hover:border-amber-700/50'
+                ? MENU_CARD_THEME.selected
+                : MENU_CARD_THEME.idle
             }`}
           >
             <div className="text-lg font-semibold text-amber-50">Player vs Player</div>
@@ -34,10 +35,10 @@ export default function Home() {
           <Link
             href="/game?mode=ai"
             onClick={() => setSelectedMode('ai')}
-            className={`rounded-2xl border p-6 text-left transition ${
+            className={`${MENU_CARD_THEME.base} ${
               selectedMode === 'ai'
-                ? 'border-amber-300 bg-amber-200/10 shadow-[0_0_0_1px_rgba(252,211,77,0.16)]'
-                : 'border-stone-700/40 bg-[#120d09] hover:border-amber-700/50'
+                ? MENU_CARD_THEME.selected
+                : MENU_CARD_THEME.idle
             }`}
           >
             <div className="text-lg font-semibold text-amber-50">Player vs Bot</div>
@@ -47,10 +48,10 @@ export default function Home() {
           <Link
             href="/game?mode=training"
             onClick={() => setSelectedMode('training')}
-            className={`rounded-2xl border p-6 text-left transition ${
+            className={`${MENU_CARD_THEME.base} ${
               selectedMode === 'training'
-                ? 'border-amber-300 bg-amber-200/10 shadow-[0_0_0_1px_rgba(252,211,77,0.16)]'
-                : 'border-stone-700/40 bg-[#120d09] hover:border-amber-700/50'
+                ? MENU_CARD_THEME.selected
+                : MENU_CARD_THEME.idle
             }`}
           >
             <div className="text-lg font-semibold text-amber-50">Training Mode</div>

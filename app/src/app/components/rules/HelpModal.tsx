@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from 'react'
+import { BOARD_THEME, STONE_THEME } from '../../constants/game'
 
 const HELP_BOARD_SIZE = 7
 
@@ -97,7 +98,7 @@ export const RULES: Rule[] = [
 function HelpMiniBoard({ board }: { board: number[][] }) {
   return (
     <div
-      className="grid aspect-square w-full max-w-[170px] border border-amber-900/35 bg-[linear-gradient(135deg,_#c79b63_0%,_#b8834a_44%,_#8e5b30_100%)] p-1.5 shadow-[0_12px_28px_rgba(0,0,0,0.28)]"
+      className={`grid aspect-square w-full max-w-[170px] border border-amber-900/35 ${BOARD_THEME.outerGradient} p-1.5 shadow-[0_12px_28px_rgba(0,0,0,0.28)]`}
       style={{ gridTemplateColumns: `repeat(${board.length}, minmax(0, 1fr))` }}
     >
       {board.map((row, rowIndex) =>
@@ -107,10 +108,10 @@ function HelpMiniBoard({ board }: { board: number[][] }) {
               <span
                 className={`h-[60%] w-[60%] rounded-full border ${
                   cell === 5
-                    ? 'border-red-600/40 bg-[radial-gradient(circle_at_30%_30%,_#ff6b6b_0%,_#c92a2a_100%)] shadow-[0_4px_8px_rgba(0,0,0,0.3)]'
+                    ? STONE_THEME.helpForbidden
                     : cell === 1 || cell === 3
-                    ? 'border-stone-700/60 bg-[radial-gradient(circle_at_30%_30%,_#8f8f8f_0%,_#232323_52%,_#050505_100%)] shadow-[inset_0_3px_5px_rgba(255,255,255,0.18),0_8px_12px_rgba(0,0,0,0.5)] ring-1 ring-black/15'
-                    : 'border-stone-300/70 bg-[radial-gradient(circle_at_30%_30%,_#ffffff_0%,_#ece4d7_50%,_#a89475_100%)] shadow-[inset_0_3px_5px_rgba(255,255,255,0.5),0_8px_12px_rgba(0,0,0,0.32)] ring-1 ring-white/20'
+                    ? STONE_THEME.black.help
+                    : STONE_THEME.white.help
                 }`}
                 style={{ opacity: cell === 3 || cell === 4 ? 0.35 : cell === 5 ? 0.4 : 1 }}
               />

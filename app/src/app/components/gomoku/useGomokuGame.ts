@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from 'react'
+import { BOARD_SIZE } from '../../constants/game'
 
 export type GameMode = 'local' | 'ai' | 'training'
 export type Player = 1 | 2
@@ -8,12 +9,14 @@ export type Player = 1 | 2
 type GameSnapshot = {
   board: number[][]
   currentPlayer: Player
+  turn: number
   capturesBlack: number
   capturesWhite: number
   winner: Player | null
 }
 
 export interface GameStats {
+  turn: number
   capturesBlack: number
   capturesWhite: number
   currentPlayer: Player
@@ -28,7 +31,6 @@ interface UseGomokuGameArgs {
   onBotResponseTime?: (ms: number | null) => void
 }
 
-export const BOARD_SIZE = 19
 export const BOARD_RANGE = BOARD_SIZE - 1
 
 const DIRECTIONS = [
@@ -301,11 +303,11 @@ function resolveMove(board: number[][], row: number, col: number, player: Player
 
 function boardHasWinner(capturesBlack: number, capturesWhite: number) {
   if (capturesBlack >= 10) {
-    return 1 as const
+    return 2 as const
   }
 
   if (capturesWhite >= 10) {
-    return 2 as const
+    return 1 as const
   }
 
   return null
@@ -314,6 +316,7 @@ function boardHasWinner(capturesBlack: number, capturesWhite: number) {
 export function useGomokuGame({ mode, onStatsChange, onBotResponseTime }: UseGomokuGameArgs) {
   const [board, setBoard] = useState<number[][]>(() => createEmptyBoard())
   const [currentPlayer, setCurrentPlayer] = useState<Player>(1)
+  const [turn, setTurn] = useState(1)
   const [capturesBlack, setCapturesBlack] = useState(0)
   const [capturesWhite, setCapturesWhite] = useState(0)
   const [hoveredCell, setHoveredCell] = useState<{ row: number; col: number } | null>(null)
@@ -324,6 +327,7 @@ export function useGomokuGame({ mode, onStatsChange, onBotResponseTime }: UseGom
 
   const stats = useMemo<GameStats>(
     () => ({
+      turn,
       capturesBlack,
       capturesWhite,
       currentPlayer,
@@ -331,7 +335,7 @@ export function useGomokuGame({ mode, onStatsChange, onBotResponseTime }: UseGom
       winner,
       isDraw,
     }),
-    [capturesBlack, capturesWhite, currentPlayer, isLocked, winner, isDraw],
+    [turn, capturesBlack, capturesWhite, currentPlayer, isLocked, winner, isDraw],
   )
 
   useEffect(() => {
@@ -342,6 +346,7 @@ export function useGomokuGame({ mode, onStatsChange, onBotResponseTime }: UseGom
     setHoveredCell(null)
     setBoard(createEmptyBoard())
     setCurrentPlayer(1)
+    setTurn(1)
     setCapturesBlack(0)
     setCapturesWhite(0)
     setIsLocked(false)
@@ -351,9 +356,17 @@ export function useGomokuGame({ mode, onStatsChange, onBotResponseTime }: UseGom
     onBotResponseTime?.(null)
   }, [mode])
 
-  const captureSnapshot = (nextBoard: number[][], nextCurrentPlayer: Player, nextCapturesBlack: number, nextCapturesWhite: number, nextWinner: Player | null): GameSnapshot => ({
+  const captureSnapshot = (
+    nextBoard: number[][],
+    nextCurrentPlayer: Player,
+    nextTurn: number,
+    nextCapturesBlack: number,
+    nextCapturesWhite: number,
+    nextWinner: Player | null,
+  ): GameSnapshot => ({
     board: cloneBoard(nextBoard),
     currentPlayer: nextCurrentPlayer,
+    turn: nextTurn,
     capturesBlack: nextCapturesBlack,
     capturesWhite: nextCapturesWhite,
     winner: nextWinner,
@@ -362,6 +375,7 @@ export function useGomokuGame({ mode, onStatsChange, onBotResponseTime }: UseGom
   const restoreSnapshot = (snapshot: GameSnapshot) => {
     setBoard(snapshot.board)
     setCurrentPlayer(snapshot.currentPlayer)
+    setTurn(snapshot.turn)
     setCapturesBlack(snapshot.capturesBlack)
     setCapturesWhite(snapshot.capturesWhite)
     setWinner(snapshot.winner)
@@ -387,14 +401,17 @@ export function useGomokuGame({ mode, onStatsChange, onBotResponseTime }: UseGom
     player: Player,
     row: number,
     col: number,
+    baseTurn = turn,
     baseCapturesBlack = capturesBlack,
     baseCapturesWhite = capturesWhite,
   ) => {
-    const nextCapturesBlack = baseCapturesBlack + (player === 1 ? move.capturedPairs * 2 : 0)
-    const nextCapturesWhite = baseCapturesWhite + (player === 2 ? move.capturedPairs * 2 : 0)
+    const nextTurn = baseTurn + 1
+    const nextCapturesBlack = baseCapturesBlack + (player === 2 ? move.capturedPairs * 2 : 0)
+    const nextCapturesWhite = baseCapturesWhite + (player === 1 ? move.capturedPairs * 2 : 0)
     const nextWinner = hasAlignmentWin(move.board, row, col, player) ? player : boardHasWinner(nextCapturesBlack, nextCapturesWhite)
 
     setBoard(move.board)
+    setTurn(nextTurn)
     setCapturesBlack(nextCapturesBlack)
     setCapturesWhite(nextCapturesWhite)
     setWinner(nextWinner)
@@ -404,6 +421,7 @@ export function useGomokuGame({ mode, onStatsChange, onBotResponseTime }: UseGom
 
     return {
       winner: nextWinner,
+      turn: nextTurn,
       capturesBlack: nextCapturesBlack,
       capturesWhite: nextCapturesWhite,
     }
@@ -429,6 +447,7 @@ export function useGomokuGame({ mode, onStatsChange, onBotResponseTime }: UseGom
   const resetGame = () => {
     setBoard(createEmptyBoard())
     setCurrentPlayer(1)
+    setTurn(1)
     setCapturesBlack(0)
     setCapturesWhite(0)
     setIsLocked(false)
@@ -453,7 +472,7 @@ export function useGomokuGame({ mode, onStatsChange, onBotResponseTime }: UseGom
 
     // The stack stores the state before the turn starts.
     // That makes undo consistent for local, AI, and training flows.
-    setHistory((previousHistory) => [...previousHistory, captureSnapshot(board, currentPlayer, capturesBlack, capturesWhite, winner)])
+    setHistory((previousHistory) => [...previousHistory, captureSnapshot(board, currentPlayer, turn, capturesBlack, capturesWhite, winner)])
 
     const humanOutcome = applyResolvedMove(humanMove, humanPlayer, row, col)
 
@@ -478,7 +497,14 @@ export function useGomokuGame({ mode, onStatsChange, onBotResponseTime }: UseGom
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ board: humanMove.board }),
+        body: JSON.stringify({
+          turn: humanOutcome.turn + 1,
+          captures: {
+            black: humanOutcome.capturesBlack,
+            white: humanOutcome.capturesWhite,
+          },
+          board: humanMove.board,
+        }),
         signal: controller.signal,
       })
 
@@ -509,7 +535,7 @@ export function useGomokuGame({ mode, onStatsChange, onBotResponseTime }: UseGom
         return
       }
 
-      const aiOutcome = applyResolvedMove(aiMove, aiPlayer, data.row, data.col, humanOutcome.capturesBlack, humanOutcome.capturesWhite)
+      const aiOutcome = applyResolvedMove(aiMove, aiPlayer, data.row, data.col, humanOutcome.turn, humanOutcome.capturesBlack, humanOutcome.capturesWhite)
 
       if (aiOutcome.winner !== null) {
         return
