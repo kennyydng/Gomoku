@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
-
-const BOARD_SIZE = 19
+import { BOARD_SIZE } from '../../constants/game'
 
 function findFirstEmptyCell(board: number[][]) {
   for (let row = 0; row < BOARD_SIZE; row += 1) {
@@ -15,7 +14,14 @@ function findFirstEmptyCell(board: number[][]) {
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as { board?: number[][] }
+  const body = (await request.json()) as {
+    turn?: number
+    captures?: {
+      black?: number
+      white?: number
+    }
+    board?: number[][]
+  }
   const board = Array.isArray(body.board) ? body.board : []
 
   await new Promise((resolve) => setTimeout(resolve, 100))
