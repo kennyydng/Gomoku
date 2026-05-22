@@ -34,8 +34,8 @@ export async function POST(request: Request) {
   console.log(`Move: ${x},${y} | time: ${time}`);
 
   return NextResponse.json({
-    row: x-1,
-    col: y-1,
+    row: y-1,
+    col: x-1,
     time: time * 1000
   })
 }

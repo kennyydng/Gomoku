@@ -3,7 +3,7 @@
 	play/3
 ]).
 
-:- prolog_flag(optimise,true).
+:- set_prolog_flag(optimise,true).
 
 cell(-). cell(1). cell(2).
 
@@ -15,18 +15,15 @@ error:has_type(board,Board) :-
 		forall(arg(_,Row,Cell), cell(Cell))
 	)).
 
-
 capture(_,_,_) :- false.
-
-:- meta_predicate with_move(+,0).
 
 :- det(play/3).
 
-play(State,X,Y) :-
+play(State,(X,Y)) :-
 	State = gomoku(Turn,Points,Board),
 
 	Player is (Turn mod 2) + 1,
-	$ arg(Y,Board,Row), $ arg(X,Row,'-'),
+	arg(Y,Board,Row),
 	setarg(X,Row,Player),
 
 	succ(Turn,Turn1),

@@ -488,9 +488,10 @@ export function useGomokuGame({ mode, onStatsChange, onBotResponseTime }: UseGom
     setIsLocked(true)
 
     try {
+      const TIMEOUT = 5000;
       const startedAt = performance.now()
       const controller = new AbortController()
-      const timeoutId = window.setTimeout(() => controller.abort(), 500)
+      const timeoutId = window.setTimeout(() => controller.abort(), TIMEOUT)
 
       const response = await fetch('/api/bot', {
         method: 'POST',
@@ -509,13 +510,13 @@ export function useGomokuGame({ mode, onStatsChange, onBotResponseTime }: UseGom
       })
 
       window.clearTimeout(timeoutId)
-      onBotResponseTime?.(Math.round(performance.now() - startedAt))
 
       if (!response.ok) {
         throw new Error('Bot response failed')
       }
 
-      const data: { row?: number; col?: number } = await response.json()
+      const data: { row?: number; col?: number, time?: number } = await response.json()
+      onBotResponseTime?.(data.time)
 
       if (
         typeof data.row !== 'number' ||
@@ -543,7 +544,7 @@ export function useGomokuGame({ mode, onStatsChange, onBotResponseTime }: UseGom
 
       setCurrentPlayer(humanPlayer)
     } catch {
-      onBotResponseTime?.(500)
+      onBotResponseTime?.(null)
     } finally {
       setIsLocked(false)
     }
