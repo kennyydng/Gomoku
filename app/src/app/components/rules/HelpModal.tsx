@@ -42,14 +42,14 @@ export const RULES: Rule[] = [
     text: 'You capture a pair of opponent stones by flanking them on both sides with your stones. The two captured stones are removed from the board, freeing the intersections.',
     showBoard: true,
     beforeBoard: createHelpBoard([
-      { row: 2, col: 0, player: 1 },
-      { row: 2, col: 1, player: 2 },
-      { row: 2, col: 2, player: 2 },
-      { row: 2, col: 3, player: 3 },
+      { row: 3, col: 1, player: 1 },
+      { row: 3, col: 2, player: 2 },
+      { row: 3, col: 3, player: 2 },
+      { row: 3, col: 4, player: 3 },
     ]),
     afterBoard: createHelpBoard([
-      { row: 2, col: 0, player: 1 },
-      { row: 2, col: 3, player: 1 },
+      { row: 3, col: 1, player: 1 },
+      { row: 3, col: 4, player: 1 },
     ]),
   },
   {
@@ -59,9 +59,9 @@ export const RULES: Rule[] = [
     showBoard: true,
     beforeLabel: 'Case 1',
     beforeBoard: createHelpBoard([
+      { row: 3, col: 2, player: 1 },
       { row: 3, col: 3, player: 1 },
       { row: 3, col: 4, player: 1 },
-      { row: 3, col: 5, player: 1 },
     ]),
     afterLabel: 'Case 2',
     afterBoard: createHelpBoard([
@@ -73,21 +73,31 @@ export const RULES: Rule[] = [
   {
     title: 'Forbidden Moves',
     category: 'Forbidden',
-    text: "A double-three is a move that introduces two simultaneous free-three alignments. You can’t block a double-three. But if that move captures a pair immediately, it is allowed.",
+    text: "A double-three is a move that introduces two simultaneous free-three alignments.\nBut the move in a would be legal:\n• If one of the free-threes would be obstructed. (Case 2)\n• If it captures a pair of opponent stones.",
     showBoard: true,
     beforeLabel: 'Case 1',
+    // Exemple : le coup semi-translucide en (3,3) (player: 3) capture la paire blanche
+    // en (3,1)-(3,2) (encadrée par noir en (3,0)) et crée simultanément
+    // deux alignements de trois (vertical et horizontal) — donc double free-three
+    // mais autorisé parce qu'il effectue une capture.
     beforeBoard: createHelpBoard([
-      { row: 3, col: 1, player: 1 },
-      { row: 3, col: 2, player: 1 },
       { row: 2, col: 3, player: 1 },
+      
+      { row: 3, col: 0, player: 1 },
+      { row: 3, col: 1, player: 2 },
+      { row: 3, col: 2, player: 2 },
+      { row: 3, col: 3, player: 3 },
+      { row: 3, col: 4, player: 1 },
+      { row: 3, col: 5, player: 1 },
+
       { row: 4, col: 3, player: 1 },
-      { row: 3, col: 3, player: 5 },
     ]),
     afterLabel: 'Case 2',
     afterBoard: createHelpBoard([
         { row: 1, col: 1, player: 1 },
         { row: 2, col: 2, player: 1 },
         { row: 4, col: 4, player: 5 },
+        { row: 4, col: 3, player: 4 },
         { row: 4, col: 5, player: 1 },
         { row: 4, col: 6, player: 1 },
     ]),

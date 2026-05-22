@@ -43,8 +43,8 @@ function GomokuBoardSurface({ board, currentPlayer, hoveredCell, isLocked, winne
             const position = (index / BOARD_RANGE) * 100
 
             return [
-              <circle key={`s-${index}-a`} cx={`${position}%`} cy={`${position}%`} r="1.6%" fill={BOARD_THEME.markColor} opacity="0.95" />,
-              <circle key={`s-${index}-b`} cx={`${position}%`} cy={`${100 - position}%`} r="1.6%" fill={BOARD_THEME.markColor} opacity="0.95" />,
+              <circle key={`s-${index}-a`} cx={`${position}%`} cy={`${position}%`} r="0.65%" fill={BOARD_THEME.markColor} opacity="0.95" />,
+              <circle key={`s-${index}-b`} cx={`${position}%`} cy={`${100 - position}%`} r="0.65%" fill={BOARD_THEME.markColor} opacity="0.95" />,
             ]
           })}
         </svg>
