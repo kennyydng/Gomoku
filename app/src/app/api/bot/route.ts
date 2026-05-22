@@ -1,35 +1,41 @@
+
 import { NextResponse } from 'next/server'
-import { BOARD_SIZE } from '../../constants/game'
+import swipl from 'swipl-stdio'
 
-function findFirstEmptyCell(board: number[][]) {
-  for (let row = 0; row < BOARD_SIZE; row += 1) {
-    for (let col = 0; col < BOARD_SIZE; col += 1) {
-      if (board[row]?.[col] === 0) {
-        return { row, col }
-      }
-    }
-  }
+const plEngine = new swipl.Engine();
+await plEngine.call("working_directory(_,'/var/www/app/bot/')")
+await plEngine.call("consult('bot.pl')")
+await plEngine.call("test");
+//await plEngine.call("test_bot");
 
-  return null
+function plBoard(board) {
+  return ".(" + board.map(
+    r => ".(" + r.map(
+      c => c == 0 ? "-" : c.toString()
+    ).join(",") + ")"
+  ).join(",") + ")";
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as {
-    turn?: number
-    captures?: {
-      black?: number
-      white?: number
-    }
-    board?: number[][]
+  const { turn, captures, board } = (await request.json()) as {
+    turn: number
+    captures: { black: number, white: number }
+    board: number[][]
   }
-  const board = Array.isArray(body.board) ? body.board : []
 
-  await new Promise((resolve) => setTimeout(resolve, 100))
+  if (!Array.isArray(board))
+    throw "Invalid board!";
+  const plState = `gomoku(${turn},${captures.black}-${captures.white},${plBoard(board)})`;
+  await plEngine.call(`make`);
+  const plResult = await plEngine.call(`bot_move(${plState},Move,Time)`);
+  const [x,y] = plResult.Move.args;
+  const time = plResult.Time;
 
-  const move = findFirstEmptyCell(board)
+  console.log(`Move: ${x},${y} | time: ${time}`);
 
   return NextResponse.json({
-    row: move?.row ?? -1,
-    col: move?.col ?? -1,
+    row: x-1,
+    col: y-1,
+    time: time * 1000
   })
 }
