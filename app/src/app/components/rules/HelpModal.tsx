@@ -18,7 +18,7 @@ export function createHelpBoard(stones: Array<{ row: number; col: number; player
   return board
 }
 
-export type Rule = {
+export type RuleModal = {
   title: string
   category: 'Victory' | 'Capture' | 'Forbidden' | 'Free-three'
   text: string
@@ -29,15 +29,15 @@ export type Rule = {
   afterLabel?: string
 }
 
-export const RULES: Rule[] = [
+export const RULE_MODALS: RuleModal[] = [
   {
-    title: 'Victory Rules',
+    title: 'Victory RuleModals',
     category: 'Victory',
     text: '• Align 5 or more stones of your color continuously to win.\n• If an alignment can be immediately broken by capture, it does not count as a win.\n• Capturing 10 opponent stones also wins the game.',
     showBoard: false,
   },
   {
-    title: 'Capture Rules',
+    title: 'Capture RuleModals',
     category: 'Capture',
     text: 'You capture a pair of opponent stones by flanking them on both sides with your stones. The two captured stones are removed from the board, freeing the intersections.',
     showBoard: true,
@@ -133,8 +133,8 @@ function HelpMiniBoard({ board }: { board: number[][] }) {
   )
 }
 
-export default function HelpModal({ show, onClose, rules }: { show: boolean; onClose: () => void; rules: Rule[] }) {
-  const [activeCategory, setActiveCategory] = useState<Rule['category']>('Victory')
+export default function HelpModal({ show, onClose, rules }: { show: boolean; onClose: () => void; rules: RuleModal[] }) {
+  const [activeCategory, setActiveCategory] = useState<RuleModal['category']>('Victory')
   const categories = useMemo(() => Array.from(new Set(rules.map((rule) => rule.category))), [rules])
 
   useEffect(() => {
@@ -149,7 +149,7 @@ export default function HelpModal({ show, onClose, rules }: { show: boolean; onC
 
   if (!show) return null
 
-  const visibleRules = rules.filter((r) => r.category === activeCategory)
+  const visibleRuleModals = rules.filter((r) => r.category === activeCategory)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-sm">
@@ -157,7 +157,7 @@ export default function HelpModal({ show, onClose, rules }: { show: boolean; onC
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-[11px] uppercase tracking-[0.5em] text-amber-200/65">In-game help</p>
-            <h2 className="mt-2 text-2xl font-black tracking-[0.08em] text-amber-100 sm:text-3xl">Rules summary</h2>
+            <h2 className="mt-2 text-2xl font-black tracking-[0.08em] text-amber-100 sm:text-3xl">RuleModals summary</h2>
           </div>
           <button
             type="button"
@@ -201,7 +201,7 @@ export default function HelpModal({ show, onClose, rules }: { show: boolean; onC
             </div>
 
             <div className="grid gap-3">
-              {visibleRules.map((rule) => (
+              {visibleRuleModals.map((rule) => (
                 <article key={rule.title} className="rounded-2xl border border-stone-700/40 bg-black/20 p-4">
                   <h3 className="text-sm font-semibold uppercase tracking-[0.35em] text-amber-200/70">{rule.title}</h3>
                   <p className="mt-2 text-sm leading-6 text-stone-200 whitespace-pre-line">{rule.text}</p>

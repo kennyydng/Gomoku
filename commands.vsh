@@ -8,3 +8,7 @@ npm --prefix app r --package-lock-only swipl-stdio
 npm run dev
 
 make -C bot
+
+git status
+git commit -m "First cpp bot"
+git push

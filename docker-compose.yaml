@@ -4,8 +4,12 @@ services:
     build: .
     entrypoint: [npm,run,dev]
     ports: [3000:3000]
+    volumes:
+      - ./profile:/var/profile
     develop:
       watch:
+        #- action: rebuild
+        #  path: bot
         - action: sync
           path: bot
           target: /var/www/app/bot

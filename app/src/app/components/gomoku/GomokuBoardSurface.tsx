@@ -2,118 +2,124 @@
 
 import { memo, useMemo } from 'react'
 import { BOARD_RANGE, BOARD_SIZE, BOARD_THEME, getPreviewClass, getStoneClass } from '../../constants/game'
-import { type Player } from './useGomokuGame'
+
+import { Gomoku } from './useGomokuGame'
+import type { Player, Position } from './useGomokuGame'
 
 interface GomokuBoardSurfaceProps {
-  board: number[][]
-  currentPlayer: Player
-  hoveredCell: { row: number; col: number } | null
+  game: Gomoku
   isLocked: boolean
-  winner: Player | null
-  forbiddenCells: Set<string>
-  onCellHover: (cell: { row: number; col: number } | null) => void
-  onCellClick: (row: number, col: number) => void
+  hintCell: Position | null
+  hoveredCell: Position | null
+  onCellHover: (cell: Position | null) => void
+  onCellClick: (cell: Position) => void
 }
 
-function GomokuBoardSurface({ board, currentPlayer, hoveredCell, isLocked, winner, forbiddenCells, onCellHover, onCellClick }: GomokuBoardSurfaceProps) {
-  const boardLineOverlay = useMemo(() => {
-    const lines = []
+const EDGE = 1
+const MIN = EDGE
+const MAX = 100 - EDGE
+const SIZE = MAX-MIN
+const CELL_SIZE = SIZE / BOARD_SIZE
 
-    for (let index = 0; index < BOARD_SIZE; index += 1) {
-      const percent = (index / BOARD_RANGE) * 100
+function makeGrid() {
+  const grid = []
+  const min_l = MIN + CELL_SIZE/2
+  const max_l = MAX - CELL_SIZE/2
+  const size_l = SIZE - CELL_SIZE
 
-      lines.push(
-        <line key={`v-${index}`} x1={`${percent}%`} y1="0%" x2={`${percent}%`} y2="100%" stroke={BOARD_THEME.lineColor} strokeWidth="1.2" />, 
-        <line key={`h-${index}`} x1="0%" y1={`${percent}%`} x2="100%" y2={`${percent}%`} stroke={BOARD_THEME.lineColor} strokeWidth="1.2" />,
-      )
+  for (let index = 0; index < BOARD_SIZE; index += 1) {
+    const percent = min_l + (index / BOARD_RANGE) * size_l
+
+    grid.push(
+      <line key={`v-${index}`} x1={`${percent}%`} x2={`${percent}%`} y1={`${min_l}%`} y2={`${max_l}%`} stroke={BOARD_THEME.lineColor} strokeWidth="1.2" />, 
+      <line key={`h-${index}`} y1={`${percent}%`} y2={`${percent}%`} x1={`${min_l}%`} x2={`${max_l}%`} stroke={BOARD_THEME.lineColor} strokeWidth="1.2" />,
+    )
+  }
+
+  for (let x of [3, 9, 15]) {
+    for (let y of [3, 9, 15]) {
+      const percent_x = min_l + (x / BOARD_RANGE) * size_l
+      const percent_y = min_l + (y / BOARD_RANGE) * size_l
+
+      grid.push(<circle key={`s-${x}-${y}`} cx={`${percent_x}%`} cy={`${percent_y}%`} r="0.65%" fill={BOARD_THEME.markColor} opacity="0.95" />)
     }
+  }
 
-    return lines
-  }, [])
+  return grid
+}
 
-  const starPoints = useMemo(() => [3, 9, 15], [])
+function GomokuBoardSurface({ game, isLocked, hintCell, hoveredCell, onCellHover, onCellClick }: GomokuBoardSurfaceProps) {
+  const shape = {
+    borderRadius: "50%",
+    position: "absolute",
+    height: "80%", top : "10%",
+    width : "80%", left: "10%",
+  }
+
+  const grid = useMemo(makeGrid, [])
+
+  const forbidden = useMemo(() => game.getForbiddenCells(), [game])
+  const cells = useMemo(() => {
+    return Array.from({ length: BOARD_SIZE }, (_,y) => (
+      (<tr key={`row-${y}`}>
+        {Array.from({ length: BOARD_SIZE }, (_,x) => {
+          const pos = [x,y]
+          const id = game.positionID(pos)
+          const stone = game.stone(pos)
+          const hovered = hoveredCell && hoveredCell[0] === x && hoveredCell[1] === y
+          const hinted = hintCell && hintCell[0] === x && hintCell[1] === y
+          const canPlay = !isLocked && stone === null
+
+          let display = null;
+          if (stone !== null)
+            display = <div style={shape} className={getStoneClass(stone as Player)} />
+          else if (forbidden.has(id))
+            display = <div style={{...shape, opacity: 0.4, background: BOARD_THEME.forbiddenStone}} />
+          else if (hovered)
+            display = <div style={shape} className={getPreviewClass(game.player)} />
+
+          return (
+            <td
+              key={`cell-${id}`}
+              aria-label={`Intersection ${pos[0]+1}, ${pos[1]+1}`}
+              style={{position: "relative"}}
+            >
+              {display} 
+              <div
+                style={{
+                  ...shape,
+                  border: hinted ? "1px solid yellow" : "none",
+                  cursor: canPlay ? "pointer" : "no-drop",
+                }}
+                disabled={!canPlay}
+                onClick={() => onCellClick(pos)}
+                onPointerEnter={() => onCellHover(pos)}
+                onPointerLeave={() => {if (hovered) onCellHover(null)}}
+                onFocus={() => onCellHover(pos)}
+                onBlur={() => {if (hovered) onCellHover(null)}}
+              />
+            </td>
+          )
+        })}
+      </tr>)
+    ))
+  }, [game,hintCell,hoveredCell])
 
   return (
-    <div className={`relative aspect-square rounded-[1.8rem] border border-amber-800/45 ${BOARD_THEME.outerGradient} p-[clamp(10px,1.6vw,18px)] shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_24px_80px_rgba(0,0,0,0.35)]`}>
+    <div className={`relative aspect-square rounded-[1.8rem] border border-amber-800/45 ${BOARD_THEME.outerGradient} p-[18px]`}>
       <div className={`relative h-full w-full rounded-[1.1rem] ${BOARD_THEME.innerGradient}`}>
-        <svg aria-hidden="true" className="absolute inset-0 h-full w-full">
+        <svg className="absolute inset-0 h-full w-full" aria-hidden="true">
           <rect x="0" y="0" width="100%" height="100%" rx="16" fill={BOARD_THEME.surfaceFill} />
-          {boardLineOverlay}
-          {starPoints.map((index) => {
-            const position = (index / BOARD_RANGE) * 100
-
-            return [
-              <circle key={`s-${index}-a`} cx={`${position}%`} cy={`${position}%`} r="0.65%" fill={BOARD_THEME.markColor} opacity="0.95" />,
-              <circle key={`s-${index}-b`} cx={`${position}%`} cy={`${100 - position}%`} r="0.65%" fill={BOARD_THEME.markColor} opacity="0.95" />,
-            ]
-          })}
+          {grid}
         </svg>
-
-        <div className="absolute inset-0">
-          {board.map((rowValues, row) =>
-            rowValues.map((cell, col) => {
-              const left = `${(col / BOARD_RANGE) * 100}%`
-              const top = `${(row / BOARD_RANGE) * 100}%`
-              const stoneSize = `clamp(16px, 2.3vmin, 28px)`
-              const isHovered = hoveredCell?.row === row && hoveredCell?.col === col
-              const canPreview = cell === 0 && !isLocked && winner === null
-
-              return (
-                <button
-                  key={`${row}-${col}`}
-                  type="button"
-                  aria-label={`Intersection ${row + 1}, ${col + 1}`}
-                  disabled={cell !== 0 || isLocked || winner !== null}
-                  onPointerEnter={() => onCellHover({ row, col })}
-                  onPointerLeave={() => {
-                    if (hoveredCell?.row === row && hoveredCell?.col === col) {
-                      onCellHover(null)
-                    }
-                  }}
-                  onFocus={() => onCellHover({ row, col })}
-                  onBlur={() => {
-                    if (hoveredCell?.row === row && hoveredCell?.col === col) {
-                      onCellHover(null)
-                    }
-                  }}
-                  onClick={() => onCellClick(row, col)}
-                  className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full outline-none transition-transform disabled:cursor-not-allowed"
-                  style={{
-                    left,
-                    top,
-                    width: 'min(1.9vw, 20px)',
-                    height: 'min(1.9vw, 20px)',
-                  }}
-                >
-                  {cell !== 0 ? (
-                    <span
-                      className={`absolute inset-0 block rounded-full ${getStoneClass(cell as Player)}`}
-                      style={{ width: stoneSize, height: stoneSize, left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
-                    />
-                  ) : canPreview && isHovered ? (
-                    <span
-                      className={`absolute inset-0 block rounded-full opacity-75 blur-[0.2px] ${getPreviewClass(currentPlayer)}`}
-                      style={{ width: stoneSize, height: stoneSize, left: '50%', top: '50%', transform: 'translate(-50%, -50%)' }}
-                    />
-                  ) : null}
-                  {forbiddenCells.has(`${row}:${col}`) && cell === 0 ? (
-                    <span
-                      className="absolute inset-0 block rounded-full opacity-40"
-                      style={{
-                        width: stoneSize,
-                        height: stoneSize,
-                        left: '50%',
-                        top: '50%',
-                        transform: 'translate(-50%, -50%)',
-                        background: BOARD_THEME.forbiddenStone,
-                      }}
-                    />
-                  ) : null}
-                </button>
-              )
-            }),
-          )}
-        </div>
+        <table className={`absolute inset-0`}
+          style={{
+            width : `${SIZE}%`, left: `${MIN}%`,
+            height: `${SIZE}%`, top : `${MIN}%`,
+          }}
+        >
+          <tbody> {cells} </tbody>
+        </table>
       </div>
     </div>
   )

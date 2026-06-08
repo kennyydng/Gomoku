@@ -18,7 +18,7 @@ function joinClasses(...parts: Array<string | false | null | undefined>) {
 
 export const STONE_THEME = {
 	black: {
-		stone: 'bg-[radial-gradient(circle_at_30%_30%,_#7c7c7c_0%,_#1e1e1e_52%,_#050505_100%)] shadow-[inset_0_2px_3px_rgba(255,255,255,0.16),0_12px_18px_rgba(0,0,0,0.45)]',
+		stone: 'bg-[radial-gradient(circle_at_30%_30%,_#7c7c7c_0%,_#1e1e1e_52%,_#050505_100%)] shadow-[inset_0_2px_3px_rgba(255,255,255,0.16),0_12px_18px_rgba(0,0,0,0.45)] ring-1 ring-black/15',
 		preview: 'bg-black/25',
 		turn: 'border-stone-700/60 ring-1 ring-black/15',
 		captureFilled: 'scale-110 border-stone-700/60',
@@ -32,7 +32,7 @@ export const STONE_THEME = {
 		),
 	},
 	white: {
-		stone: 'bg-[radial-gradient(circle_at_30%_30%,_#fffdf8_0%,_#ddd3c2_52%,_#a89475_100%)] shadow-[inset_0_2px_3px_rgba(255,255,255,0.4),0_12px_18px_rgba(0,0,0,0.3)]',
+		stone: 'bg-[radial-gradient(circle_at_30%_30%,_#fffdf8_0%,_#ddd3c2_52%,_#a89475_100%)] shadow-[inset_0_2px_3px_rgba(255,255,255,0.4),0_12px_18px_rgba(0,0,0,0.3)] ring-1 ring-white/20',
 		preview: 'bg-white/35',
 		turn: 'border-stone-300/70 ring-1 ring-white/20',
 		captureFilled: 'scale-110 border-stone-300/70',
@@ -48,22 +48,22 @@ export const STONE_THEME = {
 	helpForbidden: 'border-red-600/40 bg-[radial-gradient(circle_at_30%_30%,_#ff6b6b_0%,_#c92a2a_100%)] shadow-[0_4px_8px_rgba(0,0,0,0.3)]',
 } as const
 
-export function getTurnOrbClass(currentPlayer: 1 | 2) {
-	return currentPlayer === 1 ? joinClasses(getStoneClass(1), STONE_THEME.black.turn) : joinClasses(getStoneClass(2), STONE_THEME.white.turn)
+export function getTurnOrbClass(currentPlayer: 0 | 1) {
+	return currentPlayer === 0 ? joinClasses(getStoneClass(0), STONE_THEME.black.turn) : joinClasses(getStoneClass(1), STONE_THEME.white.turn)
 }
 
 export function getCaptureOrbClass(isFilled: boolean, tone: 'black' | 'white') {
 	if (tone === 'black') {
-		return isFilled ? joinClasses(getStoneClass(1), STONE_THEME.black.captureFilled) : STONE_THEME.black.captureEmpty
+		return isFilled ? joinClasses(getStoneClass(0), STONE_THEME.black.captureFilled) : STONE_THEME.black.captureEmpty
 	}
 
-	return isFilled ? joinClasses(getStoneClass(2), STONE_THEME.white.captureFilled) : STONE_THEME.white.captureEmpty
+	return isFilled ? joinClasses(getStoneClass(1), STONE_THEME.white.captureFilled) : STONE_THEME.white.captureEmpty
 }
 
-export function getStoneClass(player: 1 | 2) {
-	return player === 1 ? STONE_THEME.black.stone : STONE_THEME.white.stone
+export function getStoneClass(player: 0 | 1) {
+	return player === 0 ? STONE_THEME.black.stone : STONE_THEME.white.stone
 }
 
-export function getPreviewClass(player: 1 | 2) {
-	return player === 1 ? STONE_THEME.black.preview : STONE_THEME.white.preview
+export function getPreviewClass(player: 0 | 1) {
+	return player === 0 ? STONE_THEME.black.preview : STONE_THEME.white.preview
 }

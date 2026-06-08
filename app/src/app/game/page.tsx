@@ -2,66 +2,60 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import GomokuBoard, { type GameMode, type GameStats } from '../components/gomoku/GomokuBoard'
+import GomokuBoard from '../components/gomoku/GomokuBoard'
+import { Gomoku } from './Gomoku'
 import { getCaptureOrbClass, getTurnOrbClass } from '../constants/game'
 import { GAME_PAGE_THEME } from '../constants/ui'
-import HelpModal, { RULES, type Rule } from '../components/rules/HelpModal'
+import HelpModal, { RULE_MODALS } from '../components/rules/HelpModal'
+
+import type { Player } from './Gomoku'
+import type { RuleModal } from '../components/rules/HelpModal'
 
 function getGaugeLabel(tone: 'black' | 'white', mode: GameMode) {
-  if (mode !== 'local') {
-    return tone === 'black' ? 'Player' : 'Bot'
-  }
-
-  return 'Player'
+  if (tone === 'black')
+    return 'Black'
+  if (mode === 'local')
+    return 'White'
+  return null
 }
-
-// Help modal extracted to src/app/components/HelpModal.tsx
 
 export default function GamePage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const modeParamValue = searchParams?.get('mode')
-  const modeParam = modeParamValue === 'local' || modeParamValue === 'ai' || modeParamValue === 'training' ? modeParamValue : null
+  const mode = useSearchParams()?.get('mode')
+  const rules = {
+    capture: true,
+    captureUnperfect: true,
+    foulOverline: false,
+    overline: true,
+    threeThree: true,
+    fourFour: false,
+    flanking: false,
+    pass: true,
+  }
+
   const [botResponseMs, setBotResponseMs] = useState<number | null>(null)
   const [showRules, setShowRules] = useState(false)
-  const [activeCategory, setActiveCategory] = useState<Rule['category']>('Victory')
-  const [gameStats, setGameStats] = useState<GameStats>({
-    turn: 1,
-    capturesBlack: 0,
-    capturesWhite: 0,
-    currentPlayer: 1,
-    isLocked: false,
-    winner: null,
-    isDraw: false,
-  })
+  const [activeCategory, setActiveCategory] = useState<RuleModal['category']>('Victory')
+  const [turn, setTurn] = useState<number>(0)
+  const [score, setScore] = useState<[number,number]>([0,0])
+  const [currentPlayer, setCurrentPlayer] = useState<Player>(0)
+
+  const validMode = mode === 'local' || mode === 'ai' || mode === 'training'
+  if (!validMode) {
+    router.replace('/')
+    return
+  }
 
   const categories = useMemo(() => ['Victory', 'Capture', 'Forbidden'] as const, [])
 
-  useEffect(() => {
-    if (!modeParam) {
-      router.replace('/')
-    }
-  }, [modeParam, router])
-
-  useEffect(() => {
-    try {
-      sessionStorage.setItem('gomoku:inProgress', '1')
-    } catch {}
-
-    const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      e.preventDefault()
-      e.returnValue = ''
-    }
-
-    window.addEventListener('beforeunload', onBeforeUnload)
-
-    return () => {
-      try {
-        sessionStorage.removeItem('gomoku:inProgress')
-      } catch {}
-      window.removeEventListener('beforeunload', onBeforeUnload)
-    }
-  }, [])
+  const handleGameUpdate = (game: Gomoku) => {
+    if (turn !== game.moves.length)
+      setTurn(game.moves.length)
+    if (score[0] !== game.score[0] || score[1] !== game.score[1])
+      setScore(game.score)
+    if (currentPlayer !== game.player)
+      setCurrentPlayer(game.player)
+  }
 
   useEffect(() => {
     const prev = document.body.style.overflow
@@ -74,26 +68,11 @@ export default function GamePage() {
     }
   }, [showRules])
 
-  const handleStatsChange = (nextStats: GameStats) => {
-    setGameStats(nextStats)
-  }
-
-  const handleBotResponse = (ms: number | null) => {
-    setBotResponseMs(ms)
-  }
-
   const handleQuit = () => {
-    try {
-      sessionStorage.removeItem('gomoku:inProgress')
-    } catch {}
     router.push('/')
   }
 
-  if (!modeParam) {
-    return null
-  }
-
-  const visibleRules = RULES.filter((rule) => rule.category === activeCategory)
+  const visibleRules = RULE_MODALS.filter((modal) => modal.category === activeCategory)
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(255,215,145,0.12),_transparent_28%),linear-gradient(180deg,_#18110c_0%,_#0c0907_100%)] px-4 py-6 text-stone-100 sm:px-6 lg:px-8">
@@ -133,46 +112,50 @@ export default function GamePage() {
         <div className="flex min-h-0 w-full flex-col items-center gap-3">
           <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center">
             <div className={GAME_PAGE_THEME.statusPill}>
-              <span className="mr-2 align-middle">Tour {gameStats.turn}</span>
-              <span className={`inline-block h-4 w-4 rounded-full border align-middle transform-gpu ${getTurnOrbClass(gameStats.currentPlayer)}`} />
+              <span className="mr-2 align-middle">Tour {turn + 1}</span>
+              <span className={`inline-block h-4 w-4 rounded-full border align-middle ${getTurnOrbClass(currentPlayer)}`} />
             </div>
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-2">
                 <span className="w-14 shrink-0 text-right text-[11px] font-semibold uppercase tracking-[0.35em] text-stone-400">
-                  {getGaugeLabel('black', modeParam)}
+                  {getGaugeLabel('white', mode)}
                 </span>
                 {Array.from({ length: 10 }).map((_, i) => (
                   <div
-                    key={`black-${i}`}
-                    className={`h-4 w-4 rounded-full border transition-all transform-gpu ${getCaptureOrbClass(i < gameStats.capturesBlack, 'black')}`}
+                    key={`white-${i}`}
+                    className={`h-4 w-4 rounded-full border transition-all ${getCaptureOrbClass(i < score[0], 'white')}`}
                   />
                 ))}
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-14 shrink-0 text-right text-[11px] font-semibold uppercase tracking-[0.35em] text-stone-400">
-                  {getGaugeLabel('white', modeParam)}
+                  {getGaugeLabel('black', mode)}
                 </span>
                 {Array.from({ length: 10 }).map((_, i) => (
                   <div
-                    key={`white-${i}`}
-                    className={`h-4 w-4 rounded-full border transition-all transform-gpu ${getCaptureOrbClass(i < gameStats.capturesWhite, 'white')}`}
+                    key={`black-${i}`}
+                    className={`h-4 w-4 rounded-full border transition-all ${getCaptureOrbClass(i < score[1], 'black')}`}
                   />
                 ))}
               </div>
             </div>
-            {modeParam !== 'local' ? (
-              <div className={GAME_PAGE_THEME.statusPill}>
-                Bot response: {botResponseMs === null ? '...' : `${botResponseMs} ms`}
-              </div>
-            ) : null}
+            <div className={GAME_PAGE_THEME.statusPill}>
+              Bot response: {
+                botResponseMs === 'pending' ?
+                  "Thinking..." :
+                botResponseMs === null ?
+                  '...' :
+                `${botResponseMs} ms`
+              }
+            </div>
           </div>
 
           <section className={GAME_PAGE_THEME.sectionPanel}>
-            <GomokuBoard mode={modeParam} onStatsChange={handleStatsChange} onBotResponseTime={handleBotResponse} />
+            <GomokuBoard rules={rules} mode={mode} onUpdate={handleGameUpdate} onBotResponseTime={setBotResponseMs} />
           </section>
         </div>
 
-        <HelpModal show={showRules} onClose={() => setShowRules(false)} rules={RULES} />
+        <HelpModal show={showRules} onClose={() => setShowRules(false)} rules={RULE_MODALS} />
       </div>
     </main>
   )
