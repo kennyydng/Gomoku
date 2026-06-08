@@ -1,6 +1,6 @@
 
 define INIT_GC =
-$1@GC_FILE=make/$1.list
+$1@GC_FILE=$1.list
 
 $1@GC=$$(sort $$(wildcard $$(strip $$(file <$$($1@GC_FILE)))))
 $$(file >$$($1@GC_FILE),$$($1@GC))

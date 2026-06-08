@@ -16,7 +16,7 @@ export async function POST(request: Request) {
   const rules_array = Object.entries(rules).map(([_,v]) => v === 'black' ? 'b' : v ? '0' : '1')
   const state = `${rules_array.join('')}\n${moves.map(([x,y]) => `|${x}:${y}`).join('')}`;
 
-  console.log(state)
+  //console.log(state)
   
   console.log("(Re)Compiling");
   const makeRes = execSync("make gomoku", {cwd:"bot"});

@@ -76,7 +76,7 @@ export class Gomoku {
   constructor(copy: Gomoku);
   constructor(rules: Rules);
   constructor(init: Rules | Gomoku) {
-    if (init instanceof Gomoku) {
+    if (init.rules) {
       this.rules = init.rules
       this.board = init.board.map((row) => [...row])
       this.score = [...init.score]
@@ -208,7 +208,8 @@ export class Gomoku {
         return opponent
 
       if (this.delayedWin) {
-        const opponent5Lines = this.getThreats(moves.at(-1), opponent, 5
+        console.log(this.moves)
+        const opponent5Lines = this.getThreats(this.moves.at(-1), opponent, 5
                                               ).filter(({type}) => type === '5')
 
         if (opponent5Lines.length) {

@@ -26,7 +26,7 @@ export default function GamePage() {
     capture: true,
     captureUnperfect: true,
     foulOverline: false,
-    overline: true,
+    overline: false,
     threeThree: true,
     fourFour: false,
     flanking: false,

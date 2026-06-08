@@ -2,66 +2,53 @@
 #include "Gomoku.class.hpp"
 #include <list>
 
-//struct MinimaxResult {
-//	float score;
-//	std::list<Pos> line;
-//};
-//
-//struct Candidates {
-//	Gomoku &state;
-//	Pos current = {255,255};
-//	bool next() {
-//		while ( try_next() ) {
-//			if ( state.cell(current).empty() ) {
-//				for (int n = 0; n < 8; n++) {
-//					auto pos = current + Directions[n];
-//					if ( pos.valid() && !state.cell(pos).empty() )
-//						return true;
-//				}
-//			}
-//		}
-//		return false;
-//	};
-//private:
-//	bool try_next() {
-//		if (current.x == 255) {
-//			current = {0,0};
-//			return true;
-//		} else {
-//			++current;
-//			return current.valid();
-//		}
-//	}
-//};
-//
-//static float heuristic(Gomoku &state) {
-//	(void)state;
-//	return 0;
-//}
-//
-//static unsigned int counter = 0;
-//
-//static MinimaxResult minimax(Gomoku &state, const unsigned int depth) {
-//	counter++;
-//	if (depth == 0 || counter > 1000000)
-//		return { heuristic(state), {} };
-//
-//	Candidates candidates = {state};
-//	MinimaxResult best = {-100000,{}};
-//	while ( candidates.next() ) {
-//		auto move = candidates.current;
-//		state.with_move( move, [&](Gomoku &state){
-//			auto counter = minimax(state, depth-1);
-//			if (best.score < -counter.score) {
-//				best.score = -counter.score;
-//				std::swap(best.line,counter.line);
-//				best.line.push_front(move);
-//			}
-//		});
-//	}
-//
-//	return best;
-//};
+struct MinimaxResult {
+	float score;
+	std::list<Pos> line;
+};
+
+static void candidates(Gomoku &state, auto &&f) {
+	Gomoku::forall([&](Pos pos){
+		if (!state.stone(pos).empty())
+			return;
+		for (int n = 0; n < 8; n++) {
+			auto around = pos + SUBDIRECTIONS[n];
+			if (around.valid() && !state.stone(around).empty()) {
+				std::cerr << pos << std::endl;
+				state.with_move(pos, [&](Gomoku &state){
+					std::cerr << state;
+					f(state, pos);
+				});
+				break;
+			}
+		}
+	});
+}
+
+static float heuristic(Gomoku &state) {
+	(void)state;
+	return 0;
+}
+
+static unsigned int count = 0;
+
+static MinimaxResult minimax(Gomoku &state, const unsigned int depth) {
+	if (depth == 0 || count > 1000000)
+		return { heuristic(state), {} };
+	count++;
+
+	MinimaxResult best = {-100000,{}};
+	candidates(state, [&](Gomoku &state, Pos move){
+		auto counter = minimax(state, depth-1);
+		if (best.score < -counter.score) {
+			best.score = -counter.score;
+			std::swap(best.line,counter.line);
+			best.line.push_front(move);
+		}
+	});
+
+	return best;
+}
 
 int main() {
 	std::string rules;
@@ -79,8 +66,8 @@ int main() {
 
 	std::cerr << state << std::endl;
 
-	//auto move = minimax(state, 4);
-	//std::cerr << "Visited " << counter << " nodes" << std::endl;
+	auto result = minimax(state, 4);
+	std::cerr << "Visited " << count << " nodes" << std::endl;
 }
 
 /* 

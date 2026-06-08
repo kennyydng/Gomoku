@@ -18,7 +18,7 @@ void Gomoku::play(Pos move) {
 	uint16_t cap_mask = 0b111'1'1'111; // Top 8 bits are free in case of self-capture rules
 
 	//std::cerr << "Do move " << move << std::endl;
-	assert(valid(move) && stone(move).empty());
+	assert(move.valid() && stone(move).empty());
 
 	if (move.x < 3 ) cap_mask &= (uint16_t)0b110'1'0'110;
 	if (move.x > 15) cap_mask &= (uint16_t)0b011'0'1'011;

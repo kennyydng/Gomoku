@@ -5,6 +5,7 @@
 # include <iostream>
 # include <cstdint>
 # include <vector>
+# include <cassert>
 
 # include "utils.hpp"
 
@@ -75,6 +76,9 @@ struct Pos {
 	int8_t x;
 	int8_t y;
 
+	bool valid() const
+		{ return uint8_t(x) < SIZE && uint8_t(y) < SIZE; };
+
 	Pos operator+( this Pos lhs, Pos rhs )
 		{ return {int8_t(lhs.x + rhs.x), int8_t(lhs.y + rhs.y)}; };
 	Pos operator*( this Pos lhs, int8_t rhs )
@@ -122,7 +126,10 @@ class BitBoard {
 		{ return pos.x + (pos.y % LINES_PER_WORD) * X; };
 public:
 	bool operator[](Pos pos) const
-		{ return 1ull & wordof(pos)>>bitof(pos); };
+		{
+			assert(pos.valid());
+			return 1ull & wordof(pos)>>bitof(pos);
+		};
 	BitBoard &operator+=(Pos pos)
 		{ wordof(pos) |= 1ull<<bitof(pos); return *this; };
 	BitBoard &operator-=(Pos pos)
@@ -142,7 +149,7 @@ public:
 
 	unsigned turn() const
 		{ return moves.size(); };
-	unsigned player() const
+	bool player() const
 		{ return turn() % 2; };
 	unsigned score(unsigned player) const
 		{ return captures[player]; };
@@ -153,8 +160,6 @@ public:
 					f(Pos{x,y});
 		}
 
-	bool valid( const Pos & pos )
-		{ return uint8_t(pos.x) < SIZE && uint8_t(pos.y) < SIZE; };
 	Stone stone( Pos pos ) const
 		{ return {stones[0][pos], stones[1][pos]}; };
 
@@ -171,7 +176,7 @@ public:
 private:
 
 	const Rules rules;
-	std::vector<Move> moves;
+	std::vector< std::optional<Move> > moves;
 	unsigned captures[2];
 
 	BitBoard stones[2];
