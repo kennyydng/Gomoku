@@ -20,7 +20,7 @@ export function createHelpBoard(stones: Array<{ row: number; col: number; player
 
 export type RuleModal = {
   title: string
-  category: 'Victory' | 'Capture' | 'Forbidden' | 'Free-three'
+  category: 'Capture' | 'Forbidden' | 'Free-three' | 'General'
   text: string
   showBoard?: boolean
   beforeBoard?: number[][]
@@ -31,9 +31,15 @@ export type RuleModal = {
 
 export const RULE_MODALS: RuleModal[] = [
   {
-    title: 'Victory RuleModals',
-    category: 'Victory',
+    title: 'Victory',
+    category: 'General',
     text: '• Align 5 or more stones of your color continuously to win.\n• If an alignment can be immediately broken by capture, it does not count as a win.\n• Capturing 10 opponent stones also wins the game.',
+    showBoard: false,
+  },
+  {
+    title: 'Pass move',
+    category: 'General',
+    text: 'When pass is enabled, a player with no legal move can pass their turn instead of being forced into a draw. In the current setup, pass is on.',
     showBoard: false,
   },
   {
@@ -51,6 +57,18 @@ export const RULE_MODALS: RuleModal[] = [
       { row: 3, col: 1, player: 1 },
       { row: 3, col: 4, player: 1 },
     ]),
+  },
+  {
+    title: 'Capture win',
+    category: 'Capture',
+    text: 'Capturing 10 opponent stones wins the game immediately.',
+    showBoard: false,
+  },
+  {
+    title: 'Unperfect five',
+    category: 'Capture',
+    text: 'With captureUnperfect enabled, a line of 5 that can be immediately broken by capture is not always an instant win. The win may be delayed until the position is safe.',
+    showBoard: false,
   },
   {
     title: 'What is a free-three?',
@@ -73,13 +91,9 @@ export const RULE_MODALS: RuleModal[] = [
   {
     title: 'Forbidden Moves',
     category: 'Forbidden',
-    text: "A double-three is a move that introduces two simultaneous free-three alignments.\nBut the move in a would be legal:\n• If one of the free-threes would be obstructed. (Case 2)\n• If it captures a pair of opponent stones.",
+    text: "A double-three is a move that introduces two simultaneous free-three alignments. But the move in a would be legal:\n• Case 1: If it captures a pair of opponent stones\n• Case 2: If one of the free-threes would be obstructed",
     showBoard: true,
     beforeLabel: 'Case 1',
-    // Exemple : le coup semi-translucide en (3,3) (player: 3) capture la paire blanche
-    // en (3,1)-(3,2) (encadrée par noir en (3,0)) et crée simultanément
-    // deux alignements de trois (vertical et horizontal) — donc double free-three
-    // mais autorisé parce qu'il effectue une capture.
     beforeBoard: createHelpBoard([
       { row: 2, col: 3, player: 1 },
       
@@ -101,6 +115,24 @@ export const RULE_MODALS: RuleModal[] = [
         { row: 4, col: 5, player: 1 },
         { row: 4, col: 6, player: 1 },
     ]),
+  },
+  {
+    title: 'Overline',
+    category: 'Forbidden',
+    text: 'An overline is a line longer than 5 stones. Depending on the rule settings, it can be illegal for Black or for both players.',
+    showBoard: false,
+  },
+  {
+    title: 'Double-four',
+    category: 'Forbidden',
+    text: 'A double-four is a move that creates two separate four-threats at the same time. When fourFour is enabled, this move is forbidden.',
+    showBoard: false,
+  },
+  {
+    title: 'Flanking',
+    category: 'Forbidden',
+    text: 'When flanking is enabled, a five can be rejected if it is completely flanked by opponent stones. That prevents a surrounded five from counting as an immediate win.',
+    showBoard: false,
   },
 ]
 
@@ -157,7 +189,7 @@ export default function HelpModal({ show, onClose, rules }: { show: boolean; onC
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-[11px] uppercase tracking-[0.5em] text-amber-200/65">In-game help</p>
-            <h2 className="mt-2 text-2xl font-black tracking-[0.08em] text-amber-100 sm:text-3xl">RuleModals summary</h2>
+            <h2 className="mt-2 text-2xl font-black tracking-[0.08em] text-amber-100 sm:text-3xl">Rules summary</h2>
           </div>
           <button
             type="button"

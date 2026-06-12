@@ -20,14 +20,11 @@ export type Rules = {
   pass: boolean
   capture: boolean
   //captureSelf: boolean
-  catureUnperfect: boolean
-
+  captureUnperfect: boolean
   foulOverline: boolean
   overline: boolean | 'black'
-
   threeThree: boolean | 'black'
   fourFour: boolean | 'black'
-
   flanking: boolean | 'black'
 }
 
@@ -241,6 +238,26 @@ export class Gomoku {
         this.player = player
         if (this.hasAnyLegalMove())
           return null
+    }
+
+    return 'draw'
+  }
+
+  passTurn() {
+    if (!this.rules.pass || this.result !== null)
+      return null
+
+    const player = this.player
+    const opponent = opponentOf(player)
+
+    this.player = opponent
+    if (this.hasAnyLegalMove())
+      return null
+
+    if (this.rules.pass) {
+      this.player = player
+      if (this.hasAnyLegalMove())
+        return null
     }
 
     return 'draw'

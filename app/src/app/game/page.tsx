@@ -8,7 +8,7 @@ import { getCaptureOrbClass, getTurnOrbClass } from '../constants/game'
 import { GAME_PAGE_THEME } from '../constants/ui'
 import HelpModal, { RULE_MODALS } from '../components/rules/HelpModal'
 
-import type { Player } from './Gomoku'
+import type { Player, Rules } from './Gomoku'
 
 type GameMode = 'local' | 'ai' | 'training'
 import type { RuleModal } from '../components/rules/HelpModal'
@@ -23,8 +23,10 @@ function getGaugeLabel(tone: 'black' | 'white', mode: GameMode) {
 
 export default function GamePage() {
   const router = useRouter()
-  const mode = useSearchParams()?.get('mode')
-  const rules = {
+  const searchParams = useSearchParams()
+  const mode = searchParams?.get('mode')
+  
+  const defaultRules = {
     capture: true,
     captureUnperfect: true,
     foulOverline: false,
@@ -34,10 +36,35 @@ export default function GamePage() {
     flanking: false,
     pass: true,
   }
+  
+  const parseRulesFromParams = () => {
+    const ruleKeys = Object.keys(defaultRules) as Array<keyof typeof defaultRules>
+    const parsed = { ...defaultRules }
+    
+    ruleKeys.forEach(key => {
+      const param = searchParams?.get(key)
+      const current = defaultRules[key]
+      
+      // Si la règle peut avoir une valeur 'black'
+      if (typeof current === 'boolean') {
+        if (param === '0') parsed[key] = false
+        if (param === '1') parsed[key] = true
+      } else {
+        // Valeurs possibles: 'black', true, false
+        if (param === 'b') parsed[key] = 'black' as any
+        if (param === '0') parsed[key] = false as any
+        if (param === '1') parsed[key] = true as any
+      }
+    })
+    
+    return parsed
+  }
+  
+  const rules = parseRulesFromParams()
 
   const [botResponseMs, setBotResponseMs] = useState<"pending" | number | null>(null)
   const [showRules, setShowRules] = useState(false)
-  const [activeCategory, setActiveCategory] = useState<RuleModal['category']>('Victory')
+  const [activeCategory, setActiveCategory] = useState<RuleModal['category']>('General')
   const [turn, setTurn] = useState<number>(0)
   const [score, setScore] = useState<[number,number]>([0,0])
   const [currentPlayer, setCurrentPlayer] = useState<Player>(0)
@@ -108,7 +135,7 @@ export default function GamePage() {
           <h1 className="bg-[linear-gradient(180deg,_#fff7e7_0%,_#f6c77d_55%,_#d08a3f_100%)] bg-clip-text text-4xl font-black tracking-[0.1em] text-transparent sm:text-6xl">
             Gomoku
           </h1>
-          <p className="mt-2 text-sm text-stone-400">Ninuki-Gomoku - Board 19x19</p>
+          <p className="mt-2 text-sm text-stone-400">Board 19x19</p>
         </header>
 
         <div className="flex min-h-0 w-full flex-col items-center gap-3">

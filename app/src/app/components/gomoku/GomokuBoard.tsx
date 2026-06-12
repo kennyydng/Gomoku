@@ -49,9 +49,20 @@ function GomokuBoard({ mode, rules, onUpdate, onBotResponseTime }: GomokuBoardPr
     onBotResponseTime?.(null)
   }
 
+  const handlePass = () => {
+    if (!rules.pass || game.result !== null) return
+
+    setHistory([...history, game])
+    const next = new Gomoku(game)
+    next.result = next.passTurn()
+    setGameState(next)
+    setHintCell(null)
+  }
+
   const isHumanMove = mode === 'local' || game.player !== aiPlayer
   const isLocked = !isHumanMove || game.result !== null
   const shouldSuggestMove = mode === 'local' || mode === 'training'
+  const canPass = rules.pass && isHumanMove && game.result === null && !game.hasAnyLegalMove()
 
   const handleHumanMove = (pos: Position) => {
     if (isLocked) return
@@ -127,14 +138,26 @@ function GomokuBoard({ mode, rules, onUpdate, onBotResponseTime }: GomokuBoardPr
       <div className="relative mx-auto w-full max-w-[min(88vmin,76vh,720px)] sm:max-w-[min(84vmin,72vh,680px)]">
         {mode === 'training' || mode === 'local' ? (
           <div className="mb-3 flex justify-end">
-            <button
-              type="button"
-              onClick={handleUndo}
-              disabled={history.length === 0 || isLocked}
-              className="rounded-full border border-amber-400/20 bg-amber-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-amber-100 transition hover:border-amber-400/40 hover:bg-amber-300/15 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Undo last move
-            </button>
+            <div className="flex gap-3">
+              {rules.pass && isHumanMove ? (
+                <button
+                  type="button"
+                  onClick={handlePass}
+                  disabled={!canPass}
+                  className="rounded-full border border-amber-400/20 bg-amber-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-amber-100 transition hover:border-amber-400/40 hover:bg-amber-300/15 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Pass
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={handleUndo}
+                disabled={history.length === 0 || isLocked}
+                className="rounded-full border border-amber-400/20 bg-amber-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-amber-100 transition hover:border-amber-400/40 hover:bg-amber-300/15 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Undo last move
+              </button>
+            </div>
           </div>
         ) : null}
 
