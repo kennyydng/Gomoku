@@ -1,16 +1,17 @@
 "use client"
 
-import { memo } from 'react'
-import { useEffect } from 'react'
+import { memo, useEffect, useState } from 'react'
 import GomokuBoardSurface from './GomokuBoardSurface'
-import { Gomoku, useGomokuGame } from './useGomokuGame'
-import type { GameMode, Rules, Player, Position } from './useGomokuGame'
+import { Gomoku } from '../../game/Gomoku'
+import type { Rules, Player, Position } from '../../game/Gomoku'
+
+type GameMode = 'local' | 'ai' | 'training'
 
 interface GomokuBoardProps {
   mode: GameMode
   rules: Rules
   onUpdate?: (game: Gomoku) => void
-  onBotResponseTime?: (ms: number | null) => void
+  onBotResponseTime?: (ms: "pending" | number | null) => void
 }
 
 function resultString(mode: GameMode, result: Gomoku['result']) {
@@ -24,17 +25,100 @@ function resultString(mode: GameMode, result: Gomoku['result']) {
 }
 
 function GomokuBoard({ mode, rules, onUpdate, onBotResponseTime }: GomokuBoardProps) {
-  const {
-    game,
-    resetGame,
-    isLocked,
-    historyLength,
-    handleUndo,
-    hintCell,
-    hoveredCell,
-    setHoveredCell,
-    handleHumanMove,
-  } = useGomokuGame({ mode, rules, onUpdate, onBotResponseTime })
+  const [game, setGameState] = useState<Gomoku>(() => new Gomoku(rules))
+  useEffect(() => { onUpdate?.(game) }, [onUpdate, game])
+
+  const [hoveredCell, setHoveredCell] = useState<Position | null>(null)
+  const [hintCell, setHintCell] = useState<Position | null>(null)
+  const [history, setHistory] = useState<Gomoku[]>([])
+
+  const resetGame = () => {
+    setGameState(new Gomoku(rules))
+    setHistory([])
+    onBotResponseTime?.(null)
+  }
+
+  const aiPlayer: Player = 1
+
+  const handleUndo = () => {
+    if (history.length === 0) return
+    const snapshot = history.at(-1)
+    if (!snapshot) return
+    setGameState(new Gomoku(snapshot))
+    setHistory(history.slice(0,-1))
+    onBotResponseTime?.(null)
+  }
+
+  const isHumanMove = mode === 'local' || game.player !== aiPlayer
+  const isLocked = !isHumanMove || game.result !== null
+  const shouldSuggestMove = mode === 'local' || mode === 'training'
+
+  const handleHumanMove = (pos: Position) => {
+    if (isLocked) return
+    const move = game.resolveMove(pos)
+    console.log(move)
+    if (move) {
+      setHistory([...history, game])
+      const next = new Gomoku(game)
+      next.applyResolvedMove(move)
+      setGameState(next)
+    }
+  }
+
+  const fetchBotMove = async (controller: AbortController) => {
+    onBotResponseTime?.("pending")
+    try {
+      const TIMEOUT = 10000
+      const timeoutId = window.setTimeout(() => controller.abort(), TIMEOUT)
+
+      const response = await fetch('/api/bot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ game }),
+        signal: controller.signal,
+      })
+
+      window.clearTimeout(timeoutId)
+
+      if (!response.ok) throw new Error('Bot response failed')
+
+      const data: { move?: Position, time?: number } = await response.json()
+      onBotResponseTime?.(data.time ?? null)
+      return data.move
+    } catch (e) {
+      onBotResponseTime?.(null)
+      if (!(e instanceof DOMException)) console.error(e)
+    }
+  }
+
+  const handleAIMove = async (controller: AbortController) => {
+    const pos = await fetchBotMove(controller)
+    if (!pos) return
+    const move = game.resolveMove(pos)
+    if (!move) return
+    setHistory([...history, game])
+    const next = new Gomoku(game)
+    next.applyResolvedMove(move)
+    setGameState(next)
+  }
+
+  const handleAIHint = async (controller: AbortController) => {
+    const pos = await fetchBotMove(controller)
+    if (pos) setHintCell(pos)
+  }
+
+  useEffect(() => {
+    if (game.result === null) {
+      const controller = new AbortController()
+      if (!isHumanMove) {
+        handleAIMove(controller)
+        return () => controller.abort()
+      } else if (shouldSuggestMove) {
+        handleAIHint(controller)
+        return () => controller.abort()
+      }
+    }
+  }, [game])
 
   const resultLabel = resultString(mode,game.result)
 
@@ -46,7 +130,7 @@ function GomokuBoard({ mode, rules, onUpdate, onBotResponseTime }: GomokuBoardPr
             <button
               type="button"
               onClick={handleUndo}
-              disabled={historyLength === 0 || isLocked}
+              disabled={history.length === 0 || isLocked}
               className="rounded-full border border-amber-400/20 bg-amber-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-amber-100 transition hover:border-amber-400/40 hover:bg-amber-300/15 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Undo last move

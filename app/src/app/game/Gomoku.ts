@@ -2,10 +2,10 @@
 
 import { BOARD_SIZE, BOARD_RANGE } from '../constants/game'
 
-type Player = 0 | 1
+export type Player = 0 | 1
 type Stone = null | Player
-type Position = [number,number]
-type GameResult = null | 0 | 1 | 'draw'
+export type Position = [number,number]
+export type GameResult = null | 0 | 1 | 'draw'
 type Threat = {
   type: 'C3' | 'O3' | 'C4' | '4+4' | 'O4' | '5'
   dir: Direction
@@ -16,7 +16,7 @@ type Direction = [-1|0|1, -1|0|1]
 type Board = Stone[][]
 type Captures = [number, number]
 
-type Rules = {
+export type Rules = {
   pass: boolean
   capture: boolean
   //captureSelf: boolean
@@ -55,7 +55,7 @@ function minus(pos: Position, delta: Direction, times = 1): Position {
   ]
 }
 
-function reverse(dir: Direction): Position {
+function reverse(dir: Direction): Direction {
   return [-dir[0], -dir[1]]
 }
 
@@ -386,7 +386,7 @@ class Section extends Array<Stone> {
     this[where] = player
 
     if (capturesEnabled) {
-      let captures: Stones[] = []
+      let captures: [number, Player][] = []
       if (where > 2 &&
           this[where-1] === opponent &&
           this[where-2] === opponent &&
@@ -443,7 +443,7 @@ class Section extends Array<Stone> {
     const len = line[1] - line[0]
     const flanked = [
       rules.flanking && line[0] > 0      && this[line[0]-1] === opponent,
-      rules.flanking && line[1] < length && this[line[1]  ] === opponent,
+      rules.flanking && line[1] < this.length && this[line[1]  ] === opponent,
     ]
 
     if (len > 5 && rules.overline)

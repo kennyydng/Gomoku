@@ -9,6 +9,8 @@ import { GAME_PAGE_THEME } from '../constants/ui'
 import HelpModal, { RULE_MODALS } from '../components/rules/HelpModal'
 
 import type { Player } from './Gomoku'
+
+type GameMode = 'local' | 'ai' | 'training'
 import type { RuleModal } from '../components/rules/HelpModal'
 
 function getGaugeLabel(tone: 'black' | 'white', mode: GameMode) {
@@ -33,7 +35,7 @@ export default function GamePage() {
     pass: true,
   }
 
-  const [botResponseMs, setBotResponseMs] = useState<number | null>(null)
+  const [botResponseMs, setBotResponseMs] = useState<"pending" | number | null>(null)
   const [showRules, setShowRules] = useState(false)
   const [activeCategory, setActiveCategory] = useState<RuleModal['category']>('Victory')
   const [turn, setTurn] = useState<number>(0)
