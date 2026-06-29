@@ -35,6 +35,8 @@ export default function GamePage() {
     fourFour: false,
     flanking: false,
     pass: true,
+    swap2: false,
+    grid: "19x19"
   }
   
   const parseRulesFromParams = () => {

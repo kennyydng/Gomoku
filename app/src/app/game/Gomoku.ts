@@ -19,13 +19,14 @@ type Captures = [number, number]
 export type Rules = {
   pass: boolean
   capture: boolean
-  //captureSelf: boolean
   captureUnperfect: boolean
   foulOverline: boolean
   overline: boolean | 'black'
   threeThree: boolean | 'black'
   fourFour: boolean | 'black'
   flanking: boolean | 'black'
+  swap2: boolean
+  grid: {"19x19","15x15"}
 }
 
 const SUBDIRECTIONS: Array<Direction> = [

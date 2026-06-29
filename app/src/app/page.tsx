@@ -16,7 +16,76 @@ export default function Home() {
     fourFour: false,
     flanking: false,
     pass: true,
+    swap2: false,
+    grid: "19x19",
   })
+
+  const presets = [
+     {
+      key: 'free-style',
+      label: 'Free-style',
+      rules: {
+        capture: false,
+        captureUnperfect: false,
+        foulOverline: false,
+        overline: false,
+        threeThree: false,
+        fourFour: false,
+        flanking: false,
+        pass: true,
+        swap2: false,
+        grid: "15x15",
+      } as Rules,
+    },
+    {
+      key: 'pente',
+      label: 'Pente',
+      rules: {
+        capture: true,
+        captureUnperfect: true,
+        foulOverline: false,
+        overline: false,
+        threeThree: false,
+        fourFour: false,
+        flanking: false,
+        pass: true,
+        swap2: false,
+        grid: "19x19",
+      } as Rules,
+    },
+    {
+      key: 'omok',
+      label: 'Omok',
+      rules: {
+        capture: false,
+        captureUnperfect: false,
+        foulOverline: false,
+        overline: true,
+        threeThree: false,
+        fourFour: false,
+        flanking: false,
+        pass: true,
+        swap2: false,
+        grid: "19x19",
+      } as Rules,
+    },
+    {
+      key: 'renju',
+      label: 'Renju',
+      rules: {
+        capture: false,
+        captureUnperfect: false,
+        foulOverline: true,
+        overline: 'black',
+        threeThree: 'black',
+        fourFour: 'black',
+        flanking: false,
+        pass: true,
+        swap2: false,
+        grid: "19x19",
+      } as Rules,
+    },
+  ] as const
 
   const ruleLabels: Record<keyof Rules, string> = {
     pass: 'Pass',
@@ -27,21 +96,14 @@ export default function Home() {
     threeThree: 'Double free-three',
     fourFour: 'Double free-four',
     flanking: 'Flanking',
+    swap2: 'Swap2',
+    grid: 'Grid size',
   }
 
   const blackRules: Array<keyof Rules> = ['overline', 'threeThree', 'fourFour', 'flanking']
 
-  const applyRenjiPreset = () => {
-    setRules({
-      capture: true,
-      captureUnperfect: true,
-      foulOverline: true,
-      overline: 'black',
-      threeThree: 'black',
-      fourFour: 'black',
-      flanking: false,
-      pass: true,
-    })
+  const applyPreset = (presetRules: Rules) => {
+    setRules(presetRules)
   }
 
   const getRulesQueryString = () => {
@@ -53,6 +115,10 @@ export default function Home() {
         return `${key}=${value ? '1' : '0'}`
       })
       .join('&')
+  }
+
+  const getGameHref = (mode: 'local' | 'ai' | 'training') => {
+    return `/game?mode=${mode}&${getRulesQueryString()}`
   }
 
   const toggleRule = (key: keyof Rules) => {
@@ -69,16 +135,14 @@ export default function Home() {
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(255,215,145,0.16),_transparent_28%),linear-gradient(180deg,_#1a120d_0%,_#0c0907_100%)] px-4 py-10 text-stone-100 sm:px-6 lg:px-8">
       <div className="mx-auto flex w-full max-w-4xl flex-col items-center gap-10">
         <header className="space-y-4 text-center">
-          <p className="text-[11px] uppercase tracking-[0.52em] text-amber-200/70">42 School</p>
           <h1 className="bg-[linear-gradient(180deg,_#fff7e7_0%,_#f6c77d_55%,_#d08a3f_100%)] bg-clip-text text-5xl font-black tracking-[0.08em] text-transparent sm:text-7xl">
             Gomoku
           </h1>
-          <p className="text-sm text-stone-300 sm:text-base">Ninuki-Gomoku - Board 19x19</p>
         </header>
 
-        <section className="grid gap-4 grid-cols-1">
+        <section className="grid gap-2 sm:grid-cols-3">
           <Link
-            href={`/game?mode=local&${getRulesQueryString()}`}
+            href={getGameHref('local')}
             onClick={() => setSelectedMode('local')}
             className={`${MENU_CARD_THEME.base} ${
               selectedMode === 'local'
@@ -91,7 +155,7 @@ export default function Home() {
           </Link>
 
           <Link
-            href={`/game?mode=ai&${getRulesQueryString()}`}
+            href={getGameHref('ai')}
             onClick={() => setSelectedMode('ai')}
             className={`${MENU_CARD_THEME.base} ${
               selectedMode === 'ai'
@@ -104,7 +168,7 @@ export default function Home() {
           </Link>
 
           <Link
-            href={`/game?mode=training&${getRulesQueryString()}`}
+            href={getGameHref('training')}
             onClick={() => setSelectedMode('training')}
             className={`${MENU_CARD_THEME.base} ${
               selectedMode === 'training'
@@ -119,15 +183,19 @@ export default function Home() {
 
         <section className="w-full max-w-2xl space-y-4">
           <h2 className="text-lg font-semibold text-amber-100">Customize Game Rules</h2>
-          <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={applyRenjiPreset}
-              className="rounded-full border border-amber-400/20 bg-amber-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.25em] text-amber-100 transition hover:border-amber-400/40 hover:bg-amber-300/15"
-            >
-              Renji rules
-            </button>
+          <div className="grid gap-4 sm:grid-cols-4">
+            {presets.map((preset) => (
+              <button
+                key={preset.key}
+                type="button"
+                onClick={() => applyPreset(preset.rules)}
+                className="rounded-2xl border border-amber-400/20 bg-amber-300/10 px-4 py-4 text-left transition hover:border-amber-400/40 hover:bg-amber-300/15"
+              >
+                <div className="text-sm font-semibold uppercase tracking-[0.24em] text-amber-100">{preset.label}</div>
+              </button>
+            ))}
           </div>
+
           <div className="rounded-xl border border-stone-700/40 bg-black/20 p-4 space-y-3">
             {Object.entries(rules).map(([key, value]) => {
               const ruleKey = key as keyof Rules
