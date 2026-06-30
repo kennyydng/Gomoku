@@ -2,7 +2,6 @@
 
 import { memo, useMemo } from 'react'
 import { BOARD_RANGE, BOARD_SIZE, BOARD_THEME, getPreviewClass, getStoneClass } from '../../constants/game'
-
 import { Gomoku } from '../../game/Gomoku'
 import type { Player, Position } from '../../game/Gomoku'
 

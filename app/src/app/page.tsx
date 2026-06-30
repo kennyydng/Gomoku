@@ -205,7 +205,18 @@ export default function Home() {
               return (
                 <div key={key} className="flex items-center justify-between gap-3">
                   <span className="text-sm text-stone-200">{label}</span>
-                  {isBlackRule ? (
+                  {ruleKey === 'grid' ? (
+                    <select
+                      value={value as string}
+                      onChange={(e) =>
+                        setRules(prev => ({ ...prev, grid: e.target.value as Rules['grid'] }))
+                      }
+                      className="text-xs bg-stone-900 border border-stone-700 rounded px-2 py-1 text-stone-200"
+                    >
+                      <option value="15x15">15x15</option>
+                      <option value="19x19">19x19</option>
+                    </select>
+                  ) : isBlackRule ? (
                     <select
                       value={typeof value === 'string' ? value : (value ? 'true' : 'false')}
                       onChange={(e) => {
