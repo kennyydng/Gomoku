@@ -26,7 +26,7 @@ export type Rules = {
   fourFour: boolean | 'black'
   flanking: boolean | 'black'
   swap2: boolean
-  grid: {"19x19","15x15"}
+  grid: '15x15' | '19x19'
 }
 
 const SUBDIRECTIONS: Array<Direction> = [
