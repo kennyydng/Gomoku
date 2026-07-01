@@ -1,17 +1,24 @@
 "use client"
 
-import { BOARD_SIZE, BOARD_RANGE } from '../constants/game'
+import { boardSizeForGrid } from '../constants/game'
 
 export type Player = 0 | 1
 type Stone = null | Player
 export type Position = [number,number]
 export type GameResult = null | 0 | 1 | 'draw'
 type Threat = {
-  type: 'C3' | 'O3' | 'C4' | '4+4' | 'O4' | '5'
+  type: 'C3' | 'O3' | 'C4' | '4+4' | 'O4' | '5' | 'overline'
   dir: Direction
-  line: [Position,Position]
+  line: Position[]
 }
 type Direction = [-1|0|1, -1|0|1]
+
+type SectionThreat = {
+  type?: 'C3' | 'O3' | 'C4' | '4+4' | 'O4' | '5' | 'overline'
+  line?: [number, number]
+  flanked?: boolean
+  requires?: number[]
+}
 
 type Board = Stone[][]
 type Captures = [number, number]
@@ -54,15 +61,21 @@ function minus(pos: Position, delta: Direction, times = 1): Position {
 }
 
 function reverse(dir: Direction): Direction {
-  return [-dir[0], -dir[1]]
+  return [(-dir[0]) as -1 | 0 | 1, (-dir[1]) as -1 | 0 | 1]
 }
 
 function opponentOf(player: Player): Player {
-  return player ^ 1
+  return (player ^ 1) as Player
+}
+
+function ruleAppliesToPlayer(rule: boolean | 'black', player: Player) {
+  return rule === true || (rule === 'black' && player === 0)
 }
 
 export class Gomoku {
   rules: Rules
+  boardSize: number
+  boardRange: number
   board: Board
   score: Captures
   player: Player
@@ -74,10 +87,12 @@ export class Gomoku {
   constructor(copy: Gomoku);
   constructor(rules: Rules);
   constructor(init: Rules | Gomoku) {
-    if (init.rules) {
+    if (init instanceof Gomoku) {
       this.rules = init.rules
+      this.boardSize = boardSizeForGrid(init.rules.grid)
+      this.boardRange = this.boardSize - 1
       this.board = init.board.map((row) => [...row])
-      this.score = [...init.score]
+      this.score = [init.score[0], init.score[1]]
       this.player = init.player
       this.moves = [...init.moves]
       this.result = init.result
@@ -85,8 +100,10 @@ export class Gomoku {
       this.delayedWin = false
     } else {
       this.rules = init
-      this.board = Array.from({ length: BOARD_SIZE },
-        () => Array.from({ length: BOARD_SIZE },
+      this.boardSize = boardSizeForGrid(init.grid)
+      this.boardRange = this.boardSize - 1
+      this.board = Array.from({ length: this.boardSize },
+        () => Array.from({ length: this.boardSize },
           () => null
         )
       )
@@ -100,19 +117,19 @@ export class Gomoku {
   }
 
   *positions(): IterableIterator<Position> {
-    for (let i = 0; i < BOARD_SIZE; i++)
-      for (let j = 0; j < BOARD_SIZE; j++)
+    for (let i = 0; i < this.boardSize; i++)
+      for (let j = 0; j < this.boardSize; j++)
         yield [j,i]
   }
 
   positionID(pos: Position): number {
-    return pos[1] * BOARD_SIZE + pos[0]
+    return pos[1] * this.boardSize + pos[0]
   }
 
   validPosition(pos: Position): boolean {
     return (
-      pos[0] >= 0 && pos[0] <= BOARD_RANGE &&
-      pos[1] >= 0 && pos[1] <= BOARD_RANGE
+      pos[0] >= 0 && pos[0] <= this.boardRange &&
+      pos[1] >= 0 && pos[1] <= this.boardRange
     )
   }
 
@@ -149,24 +166,24 @@ export class Gomoku {
     if (!this.validPosition(move) || this.stone(move) !== null)
       return null
 
-    let captures = [];
+    let captures: Array<[Position,Player]> = []
     if (this.rules.capture)
       captures = this.findCaptures(move)
 
     const threats = this.getMoveThreats(move)
     const winning = threats.filter(({type}) => type === '5')
+    const overlineApplies = threats.some(({type}) => type === 'overline') && ruleAppliesToPlayer(this.rules.overline, this.player)
 
     if (!captures.length && !winning.length) {
-      const overline = threats.filter(({type}) => type === 'overline')
       const four = threats.filter(({type}) => type === 'O4' || type === 'C4')
       const fourFour = threats.filter(({type}) => type === '4+4')
       const three = threats.filter(({type}) => type === 'O3')
 
-      if (this.rules.foulOverline && overline.length)
+      if (this.rules.foulOverline && overlineApplies)
         return null
-      if (this.rules.fourFour && (four.length > 1 || fourFour.length))
+      if (ruleAppliesToPlayer(this.rules.fourFour, this.player) && (four.length > 1 || fourFour.length))
          return null
-      if (this.rules.threeThree && three.length > 1)
+      if (ruleAppliesToPlayer(this.rules.threeThree, this.player) && three.length > 1)
         return null
     }
 
@@ -178,7 +195,7 @@ export class Gomoku {
   }
 
   applyResolvedMove(
-    {move, captures, threats}: ReturnType<resolveMove>
+    {move, captures, threats}: Exclude<ReturnType<Gomoku['resolveMove']>, null>
   ) {
     const player = this.player
     this.set(move,player)
@@ -196,8 +213,9 @@ export class Gomoku {
   updateTurn(move: Position) {
     const player = this.player
     const opponent = opponentOf(player)
-    const player5Lines = this.getThreats(move, player, 5
-                                        ).filter(({type}) => type === '5')
+    const playerThreats = this.getThreats(move, 5)
+    const player5Lines = playerThreats.filter(({type}) => type === '5')
+    const playerOverlines = playerThreats.filter(({type}) => type === 'overline')
 
     if (this.rules.capture) {
       if (this.score[opponent] >= 10 && this.score[player] >= 10)
@@ -207,8 +225,7 @@ export class Gomoku {
 
       if (this.delayedWin) {
         console.log(this.moves)
-        const opponent5Lines = this.getThreats(this.moves.at(-1), opponent, 5
-                                              ).filter(({type}) => type === '5')
+        const opponent5Lines = this.getThreats(this.moves.at(-1)!, 5).filter(({type}) => type === '5')
 
         if (opponent5Lines.length) {
           if (this.score[player] >= 10)
@@ -221,13 +238,17 @@ export class Gomoku {
       if (this.score[player] >= 10)
         return player
 
+      if (playerOverlines.length) {
+        return player
+      }
+
       if (player5Lines.length) {
         if (this.rules.captureUnperfect && player5Lines.some(({line}) => this.isUnperfect5(line,player)))
           this.delayedWin = true
         else
           return player
       }
-    } else if (player5Lines.length) {
+    } else if (playerOverlines.length || player5Lines.length) {
       return player
     }
 
@@ -267,18 +288,25 @@ export class Gomoku {
   getForbiddenCells() {
     const forbidden = new Set<number>()
 
-    for (let pos of this.positions()) {
+    for (let y = 0; y < this.boardSize; y++) {
+      for (let x = 0; x < this.boardSize; x++) {
+        const pos: Position = [x, y]
         if (this.stone(pos) === null && this.resolveMove(pos) === null)
           forbidden.add(this.positionID(pos))
+      }
     }
 
     return forbidden
   }
 
   hasAnyLegalMove() {
-    for (let pos of this.positions())
-      if (this.resolveMove(pos))
-        return true
+    for (let y = 0; y < this.boardSize; y++) {
+      for (let x = 0; x < this.boardSize; x++) {
+        const pos: Position = [x, y]
+        if (this.resolveMove(pos))
+          return true
+      }
+    }
     return false
   }
 
@@ -304,7 +332,7 @@ export class Gomoku {
 
   getSection(pos: Position, dir: Direction): [number,Section] {
     const offset_x =  pos[0]*dir[0]
-    const offset_y = (pos[1]*dir[1] + BOARD_SIZE) % BOARD_SIZE
+    const offset_y = (pos[1]*dir[1] + this.boardSize) % this.boardSize
     const offset =
       dir[0] === 0 ? offset_y :
       dir[1] === 0 ? offset_x :
@@ -333,23 +361,30 @@ export class Gomoku {
     return []
   }
 
-  simulate_unplay(pos: Position, captured: Position[]) {
-    for (let capt of captured)
-      this.set(...capt)
+  simulate_unplay(pos: Position, captured: Array<[Position, Player]>) {
+    for (const [capturedPos, capturedPlayer] of captured)
+      this.set(capturedPos, capturedPlayer)
     this.set(pos,null)
   }
 
-  *sectionThrough(pos: Position): Iterable<ReturnType<getSection>> {
-    for (const dir of DIRECTIONS)
-      yield this.getSection(pos, dir)
+  sectionThrough(pos: Position): Array<[number, Section]> {
+    return DIRECTIONS.map((dir) => this.getSection(pos, dir))
   }
 
   rulesFor(player: Player): Rules {
-    return Object.fromEntries(
-      Object.entries(this.rules).map(
-        ([k,v]) => [k,v === 'black' ? player === 0 : v]
-      )
-    )
+    const asPlayerRule = (value: boolean | 'black') => (value === 'black' ? player === 0 : value)
+    return {
+      pass: this.rules.pass,
+      capture: this.rules.capture,
+      captureUnperfect: this.rules.captureUnperfect,
+      foulOverline: this.rules.foulOverline,
+      overline: asPlayerRule(this.rules.overline),
+      threeThree: asPlayerRule(this.rules.threeThree),
+      fourFour: asPlayerRule(this.rules.fourFour),
+      flanking: asPlayerRule(this.rules.flanking),
+      swap2: this.rules.swap2,
+      grid: this.rules.grid,
+    }
   }
 
   getMoveThreats(move: Position) {
@@ -367,11 +402,11 @@ export class Gomoku {
     for (const [offset,section] of this.sectionThrough(pos)) {
       const secThreat = section.threatAt(offset,rules,player,min)
       if (secThreat.type) {
-        if (secThreat.requires?.every((where) => this.resolveMove(section.from(where)) === null))
+        if (secThreat.requires?.every((where: number) => this.resolveMove(section.from(where)) === null))
           continue
 
         const dir = section.dir
-        const {type,line: [start,end]} = secThreat
+        const {type,line: [start,end]} = secThreat as Required<Pick<SectionThreat, 'type' | 'line'>>
         const startPos = section.from(start)
         const line = Array.from({length: end-start}, (_,i) => plus(startPos,dir,i))
         threats.push({type, dir, line})
@@ -442,7 +477,7 @@ class Section extends Array<Stone> {
     return [start,end]
   }
 
-  threatOf(move: number, rules: Rules, player: Player, min: number = 3) {
+  threatOf(move: number, rules: Rules, player: Player, min: number = 3): SectionThreat {
     if ( this.length < 5 || move < 0 || move >= this.length || this[move] !== null )
       return {}
     const captures = this.play(move, player, rules.capture)
@@ -452,19 +487,20 @@ class Section extends Array<Stone> {
   }
 
 
-  threatAt(move: number, rules: Rules, player: Player, min: number = 3) {
+  threatAt(move: number, rules: Rules, player: Player, min: number = 3): SectionThreat {
     if ( this.length < 5 )
       return {}
 
     const opponent = opponentOf(player)
     const line = this.getContiguous(move, player)
     const len = line[1] - line[0]
+    const appliesToPlayer = (rule: boolean | 'black') => ruleAppliesToPlayer(rule, player)
     const flanked = [
-      rules.flanking && line[0] > 0      && this[line[0]-1] === opponent,
-      rules.flanking && line[1] < this.length && this[line[1]  ] === opponent,
+      appliesToPlayer(rules.flanking) && line[0] > 0      && this[line[0]-1] === opponent,
+      appliesToPlayer(rules.flanking) && line[1] < this.length && this[line[1]  ] === opponent,
     ]
 
-    if (len > 5 && rules.overline)
+    if (len > 5 && appliesToPlayer(rules.overline))
       return {type: 'overline', line}
     else if (len >= 5) {
       if (len > 5 || !flanked[0] || !flanked[1])
@@ -473,19 +509,31 @@ class Section extends Array<Stone> {
       const plays = [line[0]-1,line[1]]
       const ext = plays.map((play) => this.threatOf(play, rules, player, min+1))
 
-      const is5 = (i) => (ext[i].type === '5')
-      const isFlanked = (i) => (ext[i].flanked)
+      const is5 = (i: number) => (ext[i].type === '5')
+      const isFlanked = (i: number) => (ext[i].flanked)
+      const linePointOr = (i: number, index: number, fallback: number) => {
+        const maybeLine = ext[i].line
+        if (!maybeLine)
+          return fallback
+        return maybeLine[index] ?? fallback
+      }
 
       if (is5(0) || is5(1)) {
-        const line4 = line.map((pos,i) => is5(i) ? ext[i].line[i] : pos)
+        const line4: [number, number] = [
+          is5(0) ? linePointOr(0, 0, line[0]) : line[0],
+          is5(1) ? linePointOr(1, 1, line[1]) : line[1],
+        ]
         if (is5(0) && !isFlanked(0) && is5(1) && !isFlanked(1))
           return {type: len === 4 ? 'O4' : '4+4', line: line4}
         else
           return {type: 'C4', line}
       } else if (min < 4) {
-        const isO4 = (i) => (ext[i].type === 'O4')
+        const isO4 = (i: number) => (ext[i].type === 'O4')
         if (isO4(0) || isO4(1)) {
-          const line3 = line.map((pos,i) => isO4(i) ? ext[i].line[i] : pos)
+          const line3: [number, number] = [
+            isO4(0) ? linePointOr(0, 0, line[0]) : line[0],
+            isO4(1) ? linePointOr(1, 1, line[1]) : line[1],
+          ]
           return {type: 'O3', line: line3, requires: plays.filter((_,i) => isO4(i))}
         }
 

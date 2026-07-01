@@ -1,7 +1,8 @@
 "use client"
 
 import { memo, useMemo } from 'react'
-import { BOARD_RANGE, BOARD_SIZE, BOARD_THEME, getPreviewClass, getStoneClass } from '../../constants/game'
+import type { CSSProperties } from 'react'
+import { BOARD_THEME, getPreviewClass, getStoneClass } from '../../constants/game'
 import { Gomoku } from '../../game/Gomoku'
 import type { Player, Position } from '../../game/Gomoku'
 
@@ -18,16 +19,16 @@ const EDGE = 1
 const MIN = EDGE
 const MAX = 100 - EDGE
 const SIZE = MAX-MIN
-const CELL_SIZE = SIZE / BOARD_SIZE
 
-function makeGrid() {
+function makeGrid(boardSize: number, boardRange: number) {
+  const cellSize = SIZE / boardSize
   const grid = []
-  const min_l = MIN + CELL_SIZE/2
-  const max_l = MAX - CELL_SIZE/2
-  const size_l = SIZE - CELL_SIZE
+  const min_l = MIN + cellSize / 2
+  const max_l = MAX - cellSize / 2
+  const size_l = SIZE - cellSize
 
-  for (let index = 0; index < BOARD_SIZE; index += 1) {
-    const percent = min_l + (index / BOARD_RANGE) * size_l
+  for (let index = 0; index < boardSize; index += 1) {
+    const percent = min_l + (index / boardRange) * size_l
 
     grid.push(
       <line key={`v-${index}`} x1={`${percent}%`} x2={`${percent}%`} y1={`${min_l}%`} y2={`${max_l}%`} stroke={BOARD_THEME.lineColor} strokeWidth="1.2" />, 
@@ -35,10 +36,12 @@ function makeGrid() {
     )
   }
 
-  for (let x of [3, 9, 15]) {
-    for (let y of [3, 9, 15]) {
-      const percent_x = min_l + (x / BOARD_RANGE) * size_l
-      const percent_y = min_l + (y / BOARD_RANGE) * size_l
+  const starPoints = boardSize === 15 ? [3, 7, 11] : [3, 9, 15]
+
+  for (let x of starPoints) {
+    for (let y of starPoints) {
+      const percent_x = min_l + (x / boardRange) * size_l
+      const percent_y = min_l + (y / boardRange) * size_l
 
       grid.push(<circle key={`s-${x}-${y}`} cx={`${percent_x}%`} cy={`${percent_y}%`} r="0.65%" fill={BOARD_THEME.markColor} opacity="0.95" />)
     }
@@ -48,21 +51,21 @@ function makeGrid() {
 }
 
 function GomokuBoardSurface({ game, isLocked, hintCell, hoveredCell, onCellHover, onCellClick }: GomokuBoardSurfaceProps) {
-  const shape = {
-    borderRadius: "50%",
-    position: "absolute",
-    height: "80%", top : "10%",
-    width : "80%", left: "10%",
+  const shape: CSSProperties = {
+    borderRadius: '50%',
+    position: 'absolute',
+    height: '80%', top : '10%',
+    width : '80%', left: '10%',
   }
 
-  const grid = useMemo(makeGrid, [])
+  const grid = useMemo(() => makeGrid(game.boardSize, game.boardRange), [game.boardRange, game.boardSize])
 
   const forbidden = useMemo(() => game.getForbiddenCells(), [game])
   const cells = useMemo(() => {
-    return Array.from({ length: BOARD_SIZE }, (_,y) => (
+    return Array.from({ length: game.boardSize }, (_,y) => (
       (<tr key={`row-${y}`}>
-        {Array.from({ length: BOARD_SIZE }, (_,x) => {
-          const pos = [x,y]
+        {Array.from({ length: game.boardSize }, (_,x) => {
+          const pos: Position = [x,y]
           const id = game.positionID(pos)
           const stone = game.stone(pos)
           const hovered = hoveredCell && hoveredCell[0] === x && hoveredCell[1] === y
@@ -90,8 +93,11 @@ function GomokuBoardSurface({ game, isLocked, hintCell, hoveredCell, onCellHover
                   border: hinted ? "1px solid yellow" : "none",
                   cursor: canPlay ? "pointer" : "no-drop",
                 }}
-                disabled={!canPlay}
-                onClick={() => onCellClick(pos)}
+                onClick={() => {
+                  if (!canPlay)
+                    return
+                  onCellClick(pos)
+                }}
                 onPointerEnter={() => onCellHover(pos)}
                 onPointerLeave={() => {if (hovered) onCellHover(null)}}
                 onFocus={() => onCellHover(pos)}
@@ -102,7 +108,7 @@ function GomokuBoardSurface({ game, isLocked, hintCell, hoveredCell, onCellHover
         })}
       </tr>)
     ))
-  }, [game,hintCell,hoveredCell])
+  }, [forbidden, game.boardSize, hintCell, hoveredCell, isLocked, onCellClick, onCellHover])
 
   return (
     <div className={`relative aspect-square rounded-[1.8rem] border border-amber-800/45 ${BOARD_THEME.outerGradient} p-[18px]`}>

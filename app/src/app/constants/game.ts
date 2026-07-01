@@ -1,5 +1,16 @@
-export const BOARD_SIZE = 19
+export const BOARD_SIZES = {
+	'15x15': 15,
+	'19x19': 19,
+} as const
+
+export type GridSize = keyof typeof BOARD_SIZES
+
+export const BOARD_SIZE = BOARD_SIZES['19x19']
 export const BOARD_RANGE = BOARD_SIZE - 1
+
+export function boardSizeForGrid(grid: GridSize) {
+	return BOARD_SIZES[grid]
+}
 
 export const BOARD_THEME = {
 	outerGradient: 'bg-[linear-gradient(135deg,_#c79b63_0%,_#b8834a_44%,_#8e5b30_100%)]',

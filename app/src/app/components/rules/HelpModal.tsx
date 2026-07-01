@@ -166,7 +166,7 @@ function HelpMiniBoard({ board }: { board: number[][] }) {
 }
 
 export default function HelpModal({ show, onClose, rules }: { show: boolean; onClose: () => void; rules: RuleModal[] }) {
-  const [activeCategory, setActiveCategory] = useState<RuleModal['category']>('Victory')
+  const [activeCategory, setActiveCategory] = useState<RuleModal['category']>('General')
   const categories = useMemo(() => Array.from(new Set(rules.map((rule) => rule.category))), [rules])
 
   useEffect(() => {

@@ -14,7 +14,7 @@ PRETTY_LD+=s/\(['\)]\): /\1\n\t\t/g;
 PRETTY_LD+=s/([^)]*\(\[[^\]*\]\)[^)]*)/\1/;
 
 $(TARGET): OBJ=$(call objects,$(SRC))
-$(TARGET): $$(foreach OFILE,$$(wildcard $$(OBJ)),$$(shell rm $$(OFILE))) $$(OBJ) | mkpath@$$(@D)/
+$(TARGET): $$(OBJ) | mkpath@$$(@D)/
 	@echo $(LDCMD)
 	@$(LDCMD) 2>&1 | c++filt | sed "$(PRETTY_LD)"
 	$(call GC,fclean,$@)

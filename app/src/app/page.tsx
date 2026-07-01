@@ -5,57 +5,42 @@ import Link from 'next/link'
 import { MENU_CARD_THEME } from './constants/ui'
 import type { Rules } from './game/Gomoku'
 
+function RuleInfo({ label, description }: { label: string; description: string }) {
+  return (
+    <span className="relative inline-flex shrink-0 items-center group">
+      <button
+        type="button"
+        aria-label={`Aide pour ${label}`}
+        className="flex h-5 w-5 items-center justify-center rounded-full border border-amber-400/30 bg-amber-300/10 text-[10px] font-bold text-amber-100 transition hover:border-amber-300/60 hover:bg-amber-300/20 focus:outline-none focus:ring-2 focus:ring-amber-300/40"
+      >
+        i
+      </button>
+      <span className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-64 -translate-x-1/2 rounded-xl border border-amber-900/35 bg-[#17110c] px-3 py-2 text-xs leading-5 text-stone-200 shadow-[0_18px_40px_rgba(0,0,0,0.45)] group-hover:block group-focus-within:block">
+        {description}
+      </span>
+    </span>
+  )
+}
+
 export default function Home() {
   const [selectedMode, setSelectedMode] = useState<'local' | 'ai' | 'training'>('local')
   const [rules, setRules] = useState<Rules>({
-    capture: true,
-    captureUnperfect: true,
+    capture: false,
+    captureUnperfect: false,
     foulOverline: false,
-    overline: false,
-    threeThree: true,
+    overline: true,
+    threeThree: false,
     fourFour: false,
     flanking: false,
     pass: true,
     swap2: false,
-    grid: "19x19",
+    grid: '15x15',
   })
 
   const presets = [
-     {
-      key: 'free-style',
-      label: 'Free-style',
-      rules: {
-        capture: false,
-        captureUnperfect: false,
-        foulOverline: false,
-        overline: false,
-        threeThree: false,
-        fourFour: false,
-        flanking: false,
-        pass: true,
-        swap2: false,
-        grid: "15x15",
-      } as Rules,
-    },
     {
-      key: 'pente',
-      label: 'Pente',
-      rules: {
-        capture: true,
-        captureUnperfect: true,
-        foulOverline: false,
-        overline: false,
-        threeThree: false,
-        fourFour: false,
-        flanking: false,
-        pass: true,
-        swap2: false,
-        grid: "19x19",
-      } as Rules,
-    },
-    {
-      key: 'omok',
-      label: 'Omok',
+      key: 'freestyle',
+      label: 'Freestyle',
       rules: {
         capture: false,
         captureUnperfect: false,
@@ -66,7 +51,7 @@ export default function Home() {
         flanking: false,
         pass: true,
         swap2: false,
-        grid: "19x19",
+        grid: '15x15',
       } as Rules,
     },
     {
@@ -82,7 +67,71 @@ export default function Home() {
         flanking: false,
         pass: true,
         swap2: false,
-        grid: "19x19",
+        grid: '15x15',
+      } as Rules,
+    },
+    {
+      key: 'caro',
+      label: 'Caro',
+      rules: {
+        capture: false,
+        captureUnperfect: false,
+        foulOverline: false,
+        overline: true,
+        threeThree: false,
+        fourFour: false,
+        flanking: true,
+        pass: true,
+        swap2: false,
+        grid: '19x19',
+      } as Rules,
+    },
+    {
+      key: 'omok',
+      label: 'Omok',
+      rules: {
+        capture: false,
+        captureUnperfect: false,
+        foulOverline: false,
+        overline: true,
+        threeThree: true,
+        fourFour: false,
+        flanking: false,
+        pass: true,
+        swap2: false,
+        grid: '19x19',
+      } as Rules,
+    },
+    {
+      key: 'ninuki-renju',
+      label: 'Ninuki-renju',
+      rules: {
+        capture: true,
+        captureUnperfect: true,
+        foulOverline: false,
+        overline: true,
+        threeThree: true,
+        fourFour: false,
+        flanking: false,
+        pass: true,
+        swap2: false,
+        grid: '15x15',
+      } as Rules,
+    },
+    {
+      key: 'pente',
+      label: 'Pente',
+      rules: {
+        capture: true,
+        captureUnperfect: false,
+        foulOverline: false,
+        overline: false,
+        threeThree: false,
+        fourFour: false,
+        flanking: false,
+        pass: true,
+        swap2: false,
+        grid: '19x19',
       } as Rules,
     },
   ] as const
@@ -100,6 +149,19 @@ export default function Home() {
     grid: 'Grid size',
   }
 
+  const ruleDescriptions: Record<keyof Rules, string> = {
+    pass: 'Autorise un joueur à passer son tour si aucune autre action utile n’est possible.',
+    capture: 'Active la prise de deux pierres adverses quand elles sont encadrées par vos pierres.',
+    captureUnperfect: 'Empêche parfois qu’une ligne de 5 soit validée si elle peut être immédiatement cassée par une capture.',
+    foulOverline: 'Interdit le sur-ligne pour certaines configurations, surtout côté noir selon la règle choisie.',
+    overline: 'Une ligne de plus de 5 pierres peut compter comme une victoire, ou être réservée au noir selon le mode.',
+    threeThree: 'Interdit les coups qui créent deux menaces de “trois libres” en même temps.',
+    fourFour: 'Interdit les coups qui créent deux menaces de “quatre” en même temps.',
+    flanking: 'Refuse une ligne de 5 si elle est complètement encadrée par les pierres adverses.',
+    swap2: 'Active la règle Swap2 pour équilibrer les débuts de partie après les premiers coups.',
+    grid: 'Choisit la taille du plateau: 15x15 pour des parties plus rapides, 19x19 pour un jeu plus ouvert.',
+  }
+
   const blackRules: Array<keyof Rules> = ['overline', 'threeThree', 'fourFour', 'flanking']
 
   const applyPreset = (presetRules: Rules) => {
@@ -109,6 +171,9 @@ export default function Home() {
   const getRulesQueryString = () => {
     return Object.entries(rules)
       .map(([key, value]) => {
+        if (key === 'grid') {
+          return `${key}=${value}`
+        }
         if (typeof value === 'string') {
           return `${key}=${value === 'black' ? 'b' : '0'}`
         }
@@ -183,7 +248,7 @@ export default function Home() {
 
         <section className="w-full max-w-2xl space-y-4">
           <h2 className="text-lg font-semibold text-amber-100">Customize Game Rules</h2>
-          <div className="grid gap-4 sm:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {presets.map((preset) => (
               <button
                 key={preset.key}
@@ -201,10 +266,14 @@ export default function Home() {
               const ruleKey = key as keyof Rules
               const isBlackRule = blackRules.includes(ruleKey)
               const label = ruleLabels[ruleKey]
+              const description = ruleDescriptions[ruleKey]
               
               return (
                 <div key={key} className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-stone-200">{label}</span>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="text-sm text-stone-200">{label}</span>
+                    <RuleInfo label={label} description={description} />
+                  </div>
                   {ruleKey === 'grid' ? (
                     <select
                       value={value as string}

@@ -67,6 +67,8 @@ int main() {
 	std::cerr << state << std::endl;
 
 	auto result = minimax(state, 4);
+	if (!result.line.empty())
+		std::cout << "|" << result.line.front();
 	std::cerr << "Visited " << count << " nodes" << std::endl;
 }
 

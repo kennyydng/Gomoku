@@ -8,7 +8,7 @@ std::ostream &operator<<(std::ostream &o, Gomoku const &gomoku) {
 		Stone(Stone::WHITE) << gomoku.score(0) << "-" <<
 		Stone(Stone::BLACK) << gomoku.score(1) << "\n";
 	Gomoku::forall([&](Pos &&pos){
-		o << gomoku.stone(pos) << (pos.x == 18 ? "\n" : "─");
+		o << gomoku.stone(pos) << (pos.x == (int8_t)current_board_size() - 1 ? "\n" : "─");
 	});
 	return o;
 }
@@ -16,14 +16,15 @@ std::ostream &operator<<(std::ostream &o, Gomoku const &gomoku) {
 void Gomoku::play(Pos move) {
 	const bool player = this->player();
 	uint16_t cap_mask = 0b111'1'1'111; // Top 8 bits are free in case of self-capture rules
+	const int8_t max_capture_anchor = (int8_t)rules.boardSize - 4;
 
 	//std::cerr << "Do move " << move << std::endl;
 	assert(move.valid() && stone(move).empty());
 
 	if (move.x < 3 ) cap_mask &= (uint16_t)0b110'1'0'110;
-	if (move.x > 15) cap_mask &= (uint16_t)0b011'0'1'011;
+	if (move.x > max_capture_anchor) cap_mask &= (uint16_t)0b011'0'1'011;
 	if (move.y < 3 ) cap_mask &= (uint16_t)0b111'1'1'000;
-	if (move.y > 15) cap_mask &= (uint16_t)0b000'1'1'111;
+	if (move.y > max_capture_anchor) cap_mask &= (uint16_t)0b000'1'1'111;
 
 	stones[player] += move;
 	for (int n = 0; n < 8; n++) {

@@ -11,7 +11,13 @@
 
 # define SIZE 19
 
+inline uint8_t &current_board_size() {
+	static uint8_t size = SIZE;
+	return size;
+}
+
 struct Rules {
+	uint8_t boardSize;
 	bool pass;
 
 	bool capture;
@@ -27,17 +33,25 @@ struct Rules {
 	} players[2];
 
 	Rules(std::string str) {
-			if (str.size() != 8)
+			if (str.size() != 9)
 				throw std::runtime_error("Invalid rules");
 
-			pass                    	 = (str[0] == '1');
-			capture                 	 = (str[1] == '1');
-			captureUnperfect        	 = (str[2] == '1');
-			players[0].foulOverline 	 = (str[3] == '1'); players[1].foulOverline 	 = (str[3] ==  '1' || str[3] ==  'b');
-			players[0].overline     	 = (str[4] == '1'); players[1].overline     	 = (str[4] ==  '1' || str[4] ==  'b');
-			players[0].threeThree   	 = (str[5] == '1'); players[1].threeThree   	 = (str[5] ==  '1' || str[5] ==  'b');
-			players[0].fourFour     	 = (str[6] == '1'); players[1].fourFour     	 = (str[6] ==  '1' || str[6] ==  'b');
-			players[0].flanking     	 = (str[7] == '1'); players[1].flanking     	 = (str[7] ==  '1' || str[7] ==  'b');
+			if (str[0] == '5')
+				boardSize = 15;
+			else if (str[0] == '9')
+				boardSize = 19;
+			else
+				throw std::runtime_error("Invalid grid size");
+			current_board_size() = boardSize;
+
+			pass                    	 = (str[1] == '1');
+			capture                 	 = (str[2] == '1');
+			captureUnperfect        	 = (str[3] == '1');
+			players[0].foulOverline 	 = (str[4] == '1'); players[1].foulOverline 	 = (str[4] ==  '1' || str[4] ==  'b');
+			players[0].overline     	 = (str[5] == '1'); players[1].overline     	 = (str[5] ==  '1' || str[5] ==  'b');
+			players[0].threeThree   	 = (str[6] == '1'); players[1].threeThree   	 = (str[6] ==  '1' || str[6] ==  'b');
+			players[0].fourFour     	 = (str[7] == '1'); players[1].fourFour     	 = (str[7] ==  '1' || str[7] ==  'b');
+			players[0].flanking     	 = (str[8] == '1'); players[1].flanking     	 = (str[8] ==  '1' || str[8] ==  'b');
 		}
 };
 
@@ -77,7 +91,7 @@ struct Pos {
 	int8_t y;
 
 	bool valid() const
-		{ return uint8_t(x) < SIZE && uint8_t(y) < SIZE; };
+		{ return uint8_t(x) < current_board_size() && uint8_t(y) < current_board_size(); };
 
 	Pos operator+( this Pos lhs, Pos rhs )
 		{ return {int8_t(lhs.x + rhs.x), int8_t(lhs.y + rhs.y)}; };
@@ -155,8 +169,8 @@ public:
 		{ return captures[player]; };
 
 	static void forall(auto &&f) {
-			for (int8_t y = 0; y < SIZE; y++)
-				for (int8_t x = 0; x < SIZE; x++)
+			for (int8_t y = 0; y < (int8_t)current_board_size(); y++)
+				for (int8_t x = 0; x < (int8_t)current_board_size(); x++)
 					f(Pos{x,y});
 		}
 
@@ -176,12 +190,10 @@ public:
 private:
 
 	const Rules rules;
-	std::vector< std::optional<Move> > moves;
+	std::vector<Move> moves;
 	unsigned captures[2];
 
 	BitBoard stones[2];
-
-	unsigned test = 0b1010101010101010101010101010101;
 };
 
 std::ostream &operator<<(std::ostream &o, Gomoku const &gomoku);

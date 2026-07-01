@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import GomokuBoard from '../components/gomoku/GomokuBoard'
 import { Gomoku } from './Gomoku'
@@ -21,12 +21,12 @@ function getGaugeLabel(tone: 'black' | 'white', mode: GameMode) {
   return null
 }
 
-export default function GamePage() {
+function GamePageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const mode = searchParams?.get('mode')
   
-  const defaultRules = {
+  const defaultRules: Rules = {
     capture: true,
     captureUnperfect: true,
     foulOverline: false,
@@ -40,24 +40,40 @@ export default function GamePage() {
   }
   
   const parseRulesFromParams = () => {
-    const ruleKeys = Object.keys(defaultRules) as Array<keyof typeof defaultRules>
-    const parsed = { ...defaultRules }
-    
-    ruleKeys.forEach(key => {
+    const parsed: Rules = { ...defaultRules }
+
+    const readBoolean = (key: Exclude<keyof Rules, 'overline' | 'threeThree' | 'fourFour' | 'flanking' | 'grid'>) => {
       const param = searchParams?.get(key)
-      const current = defaultRules[key]
-      
-      // Si la règle peut avoir une valeur 'black'
-      if (typeof current === 'boolean') {
-        if (param === '0') parsed[key] = false
-        if (param === '1') parsed[key] = true
-      } else {
-        // Valeurs possibles: 'black', true, false
-        if (param === 'b') parsed[key] = 'black' as any
-        if (param === '0') parsed[key] = false as any
-        if (param === '1') parsed[key] = true as any
-      }
-    })
+      if (param === '0')
+        parsed[key] = false
+      if (param === '1')
+        parsed[key] = true
+    }
+
+    const readPlayerRule = (key: 'overline' | 'threeThree' | 'fourFour' | 'flanking') => {
+      const param = searchParams?.get(key)
+      if (param === 'b')
+        parsed[key] = 'black'
+      if (param === '0')
+        parsed[key] = false
+      if (param === '1')
+        parsed[key] = true
+    }
+
+    readBoolean('pass')
+    readBoolean('capture')
+    readBoolean('captureUnperfect')
+    readBoolean('foulOverline')
+    readBoolean('swap2')
+
+    readPlayerRule('overline')
+    readPlayerRule('threeThree')
+    readPlayerRule('fourFour')
+    readPlayerRule('flanking')
+
+    const gridParam = searchParams?.get('grid')
+    if (gridParam === '15x15' || gridParam === '19x19')
+      parsed.grid = gridParam
     
     return parsed
   }
@@ -137,7 +153,7 @@ export default function GamePage() {
           <h1 className="bg-[linear-gradient(180deg,_#fff7e7_0%,_#f6c77d_55%,_#d08a3f_100%)] bg-clip-text text-4xl font-black tracking-[0.1em] text-transparent sm:text-6xl">
             Gomoku
           </h1>
-          <p className="mt-2 text-sm text-stone-400">Board 19x19</p>
+          <p className="mt-2 text-sm text-stone-400">Grid size: {rules.grid}</p>
         </header>
 
         <div className="flex min-h-0 w-full flex-col items-center gap-3">
@@ -189,5 +205,13 @@ export default function GamePage() {
         <HelpModal show={showRules} onClose={() => setShowRules(false)} rules={RULE_MODALS} />
       </div>
     </main>
+  )
+}
+
+export default function GamePage() {
+  return (
+    <Suspense fallback={<main className="flex min-h-screen items-center justify-center text-stone-200">Loading game...</main>}>
+      <GamePageContent />
+    </Suspense>
   )
 }
