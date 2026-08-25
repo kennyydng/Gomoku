@@ -6,6 +6,7 @@
 # include <cstdint>
 # include <vector>
 # include <cassert>
+# include <random>
 
 # include "utils.hpp"
 
@@ -95,6 +96,8 @@ struct Pos {
 
 	Pos operator+( this Pos lhs, Pos rhs )
 		{ return {int8_t(lhs.x + rhs.x), int8_t(lhs.y + rhs.y)}; };
+	Pos operator-( this Pos lhs, Pos rhs )
+		{ return {int8_t(lhs.x - rhs.x), int8_t(lhs.y - rhs.y)}; };
 	Pos operator*( this Pos lhs, int8_t rhs )
 		{ return {int8_t(lhs.x * rhs  ), int8_t(lhs.y * rhs  )}; };
 
@@ -108,8 +111,8 @@ struct Pos {
 		{ return os << (int)pos.x << ":" << (int)pos.y; };
 };
 
-constexpr Pos DIRECTIONS[8] = {
-		{ 1, 0}, { 0, 1}, 
+constexpr Pos DIRECTIONS[4] = {
+		{ 1, 0}, { 0, 1},
 		{ 1, 1}, { 1,-1},
 	};
 constexpr Pos SUBDIRECTIONS[8] = {
@@ -117,6 +120,49 @@ constexpr Pos SUBDIRECTIONS[8] = {
 		{-1, 0},        { 1, 0},
 		{-1, 1},{ 0, 1},{ 1, 1},
 	};
+
+inline int runLenOf(Pos start, Pos end, Pos dir)
+	{ return dir.x ? (end.x - start.x) / dir.x + 1 : (end.y - start.y) / dir.y + 1; };
+inline Pos stepPos(Pos p, Pos dir, int n)
+	{ return p + dir * int8_t(n); };
+
+// Zobrist hashing: one random 64-bit key per (position, color), plus one
+// for side-to-move, XORed in/out as stones are placed/removed so Gomoku
+// can maintain a running position hash for the search's transposition
+// table. Fixed seed: reproducible runs, no need for real randomness.
+inline uint64_t zobristKey(Pos pos, bool player) {
+	static uint64_t table[2][SIZE * SIZE];
+	static bool initialized = false;
+	if (!initialized) {
+		std::mt19937_64 rng(0xC0FFEE);
+		for (auto &colorTable : table)
+			for (auto &key : colorTable)
+				key = rng();
+		initialized = true;
+	}
+	return table[player][pos.y * SIZE + pos.x];
+}
+
+inline uint64_t zobristSideKey() {
+	static const uint64_t key = std::mt19937_64(0xFACADE)();
+	return key;
+}
+
+enum class ThreatType : uint8_t { None, O3, C4, FourFour, O4, Five, Overline };
+
+struct Threat {
+	ThreatType type = ThreatType::None;
+	Pos start{};
+	Pos end{};
+	Pos dir{};
+};
+
+enum class Result : uint8_t { Ongoing, Win, Draw };
+
+struct Outcome {
+	Result state = Result::Ongoing;
+	bool winner = false;
+};
 
 class BitBoard {
 	static constexpr size_t X = SIZE;
@@ -153,6 +199,10 @@ public:
 struct Move {
 	Pos pos;
 	uint16_t captures;
+	bool delayedWinBefore = false;
+	Pos delayedLine[2] = {};
+	Pos delayedDir = {};
+	bool delayedPlayerBefore = false;
 };
 
 class Gomoku {
@@ -167,6 +217,8 @@ public:
 		{ return turn() % 2; };
 	unsigned score(unsigned player) const
 		{ return captures[player]; };
+	uint64_t zobrist() const
+		{ return hash; };
 
 	static void forall(auto &&f) {
 			for (int8_t y = 0; y < (int8_t)current_board_size(); y++)
@@ -187,6 +239,27 @@ public:
 
 	void play(Pos move);
 	void undo();
+
+	// Rules engine: threats, move legality and win/draw detection.
+	// Contract: threatAt/getThreats assume `pos` already holds `player`'s stone.
+	void rawPlace(Pos pos, bool player)
+		{ stones[player] += pos; };
+	void rawRemove(Pos pos, bool player)
+		{ stones[player] -= pos; };
+
+	Pos runStart(Pos pos, Pos dir, bool player) const;
+	Pos runEnd(Pos pos, Pos dir, bool player) const;
+
+	Threat threatAt(Pos pos, Pos dir, bool player, int min = 3);
+	Threat threatOf(Pos pos, Pos dir, bool player, int min);
+	std::vector<Threat> getThreats(Pos pos, bool player, int min = 3);
+
+	bool isUnperfect5(Pos start, Pos end, Pos dir, bool player);
+	bool wouldCapture(Pos move, bool player);
+	bool isLegalMove(Pos pos, bool player);
+
+	Outcome applyMove(Pos pos);
+
 private:
 
 	const Rules rules;
@@ -194,6 +267,14 @@ private:
 	unsigned captures[2];
 
 	BitBoard stones[2];
+
+	uint64_t hash = 0;
+
+	bool delayedWin = false;
+	Pos delayedStart{};
+	Pos delayedEnd{};
+	Pos delayedDir{};
+	bool delayedPlayer = false;
 };
 
 std::ostream &operator<<(std::ostream &o, Gomoku const &gomoku);

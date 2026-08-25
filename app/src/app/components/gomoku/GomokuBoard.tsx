@@ -105,7 +105,16 @@ function GomokuBoard({ mode, rules, onUpdate, onBotResponseTime }: GomokuBoardPr
   const handleAIMove = async (controller: AbortController) => {
     const pos = await fetchBotMove(controller)
     if (!pos) return
-    const move = game.resolveMove(pos)
+    let move = game.resolveMove(pos)
+    if (!move) {
+      console.error('Bot suggested illegal move, falling back to any legal move', pos)
+      outer: for (let y = 0; y < game.boardSize; y++) {
+        for (let x = 0; x < game.boardSize; x++) {
+          move = game.resolveMove([x, y])
+          if (move) break outer
+        }
+      }
+    }
     if (!move) return
     setHistory([...history, game])
     const next = new Gomoku(game)

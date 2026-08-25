@@ -2,9 +2,11 @@
 services:
   gomoku:
     build: .
+    platform: linux/arm64
     entrypoint: [npm,run,dev]
     ports: [3000:3000]
     volumes:
+      - /var/www/app/node_modules
       - ./profile:/var/profile
       - ./app/src:/var/www/app/src
       - ./bot/inc:/var/www/app/bot/inc

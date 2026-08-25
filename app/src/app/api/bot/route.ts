@@ -1,7 +1,25 @@
 
 import { NextResponse } from 'next/server'
 import { execSync } from 'child_process';
+import { existsSync, statSync } from 'fs';
+import { join } from 'path';
 import type { Gomoku, Rules, Position } from '../../game/Gomoku'
+
+const BOT_CWD = 'bot'
+const BOT_BINARY = 'gomoku'
+const BOT_SOURCES = ['src/main.cpp', 'src/Gomoku.cpp', 'inc/Gomoku.class.hpp', 'inc/utils.hpp']
+
+function botNeedsRebuild(): boolean {
+  const binaryPath = join(BOT_CWD, BOT_BINARY)
+  if (!existsSync(binaryPath))
+    return true
+
+  const binaryTime = statSync(binaryPath).mtimeMs
+  return BOT_SOURCES.some((relativePath) => {
+    const sourcePath = join(BOT_CWD, relativePath)
+    return existsSync(sourcePath) && statSync(sourcePath).mtimeMs > binaryTime
+  })
+}
 
 export async function POST(request: Request) {
   const { game: {rules, moves} } = (await request.json()) as { game: Gomoku }
@@ -33,12 +51,14 @@ export async function POST(request: Request) {
 
   //console.log(state)
   
-  console.log("(Re)Compiling");
-  execSync("g++ -std=c++23 -Wall -Wextra -Werror -pedantic -I inc src/main.cpp src/Gomoku.cpp -o gomoku", {cwd:"bot"});
+  if (botNeedsRebuild()) {
+    console.log("(Re)Compiling");
+    execSync("g++ -std=c++23 -O2 -Wall -Wextra -Werror -pedantic -I inc src/main.cpp src/Gomoku.cpp -o gomoku", {cwd: BOT_CWD});
+  }
 
   console.log("Asking bot for move...");
   const startTime = Date.now();
-  const result = execSync("./gomoku", {cwd: "bot", input: state, timeout: 500000}).toString();
+  const result = execSync("./gomoku", {cwd: BOT_CWD, input: state, timeout: 500000}).toString();
   const time = Date.now() - startTime;
 
   const moveRegex = /\|(\d+):(\d+)/g

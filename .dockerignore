@@ -1,0 +1,4 @@
+**/node_modules
+**/.next
+bot/obj
+bot/gomoku
