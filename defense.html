@@ -1,0 +1,863 @@
+<title>Carnet de soutenance Gomoku</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --paper: #EDE7D8;
+    --paper-raised: #E2DAC4;
+    --paper-raised-2: #D8CDAF;
+    --ink: #221E17;
+    --ink-soft: #5B5443;
+    --ink-faint: #8A8168;
+    --rule: #C9BFA0;
+    --seal: #A6382C;
+    --seal-tint: rgba(166,56,44,0.10);
+    --seal-tint-strong: rgba(166,56,44,0.18);
+    --brass: #8A6A22;
+    --code-bg: #1E1A14;
+    --code-ink: #E8E1CE;
+    --code-ink-soft: #9C947C;
+    --stone-black: #1c1a17;
+    --stone-white: #f4efe4;
+    --stone-black-ring: #050403;
+    --stone-white-ring: #b6ab8e;
+    --shadow: rgba(40,32,16,0.16);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #16130E;
+      --paper-raised: #1E1A13;
+      --paper-raised-2: #262014;
+      --ink: #E9E1CC;
+      --ink-soft: #AFA588;
+      --ink-faint: #756D57;
+      --rule: #3A3323;
+      --seal: #E2685A;
+      --seal-tint: rgba(226,104,90,0.12);
+      --seal-tint-strong: rgba(226,104,90,0.22);
+      --brass: #D6B34A;
+      --code-bg: #0F0D09;
+      --code-ink: #ECE5D3;
+      --code-ink-soft: #8A8167;
+      --stone-black: #0a0908;
+      --stone-white: #f4efe4;
+      --stone-black-ring: #000000;
+      --stone-white-ring: #4a4536;
+      --shadow: rgba(0,0,0,0.4);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #16130E;
+    --paper-raised: #1E1A13;
+    --paper-raised-2: #262014;
+    --ink: #E9E1CC;
+    --ink-soft: #AFA588;
+    --ink-faint: #756D57;
+    --rule: #3A3323;
+    --seal: #E2685A;
+    --seal-tint: rgba(226,104,90,0.12);
+    --seal-tint-strong: rgba(226,104,90,0.22);
+    --brass: #D6B34A;
+    --code-bg: #0F0D09;
+    --code-ink: #ECE5D3;
+    --code-ink-soft: #8A8167;
+    --stone-black: #0a0908;
+    --stone-white: #f4efe4;
+    --stone-black-ring: #000000;
+    --stone-white-ring: #4a4536;
+    --shadow: rgba(0,0,0,0.4);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Work Sans", ui-sans-serif, system-ui, sans-serif;
+    font-size: 16.5px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3 {
+    font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+    text-wrap: balance;
+    color: var(--ink);
+    line-height: 1.15;
+  }
+
+  a { color: var(--seal); }
+
+  code, pre, .mono { font-family: "IBM Plex Mono", ui-monospace, "SFMono-Regular", monospace; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 260px minmax(0, 1fr);
+    gap: 0;
+    max-width: 1180px;
+    margin: 0 auto;
+  }
+
+  /* --- Sidebar / TOC ------------------------------------------------ */
+
+  .sidebar {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 2.2rem 1.4rem 2rem 2rem;
+    border-right: 1px solid var(--rule);
+    scrollbar-width: thin;
+  }
+
+  .sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 1.6rem;
+  }
+
+  .sidebar-brand .stones { display: flex; }
+  .sidebar-brand .stone { width: 14px; height: 14px; border-radius: 50%; margin-left: -4px; }
+  .sidebar-brand .stone:first-child { margin-left: 0; }
+
+  .sidebar-brand .label {
+    font-family: "Source Serif 4", serif;
+    font-weight: 700;
+    font-size: 1.05rem;
+    letter-spacing: 0.01em;
+  }
+
+  .sidebar nav { display: flex; flex-direction: column; gap: 0.1rem; }
+
+  .sidebar a.toc-link {
+    display: flex;
+    gap: 0.6rem;
+    align-items: baseline;
+    text-decoration: none;
+    color: var(--ink-soft);
+    font-size: 0.86rem;
+    padding: 0.4rem 0.5rem;
+    border-radius: 8px;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .sidebar a.toc-link:hover { background: var(--paper-raised); color: var(--ink); }
+  .sidebar a.toc-link.active { background: var(--seal-tint); color: var(--seal); font-weight: 600; }
+
+  .toc-num {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.78rem;
+    color: var(--ink-faint);
+    min-width: 1.3em;
+  }
+  .sidebar a.toc-link.active .toc-num { color: var(--seal); }
+
+  .sidebar-foot {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--rule);
+    font-size: 0.76rem;
+    color: var(--ink-faint);
+    line-height: 1.5;
+  }
+
+  /* --- Main column --------------------------------------------------- */
+
+  main { padding: 3.2rem clamp(1.2rem, 4vw, 3.5rem) 6rem; min-width: 0; }
+
+  .masthead { max-width: 700px; margin-bottom: 2.6rem; }
+  .eyebrow {
+    font-family: "IBM Plex Mono", monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    font-size: 0.72rem;
+    color: var(--brass);
+    margin: 0 0 0.7rem;
+  }
+  .masthead h1 { font-size: clamp(1.9rem, 3.4vw, 2.5rem); margin: 0 0 0.7rem; }
+  .masthead .dek { color: var(--ink-soft); max-width: 62ch; margin: 0; font-size: 1.02rem; }
+
+  .stat-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(122px, 1fr));
+    gap: 1px;
+    background: var(--rule);
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    overflow: hidden;
+    max-width: 760px;
+    margin: 1.8rem 0 0;
+  }
+  .stat {
+    background: var(--paper-raised);
+    padding: 0.85rem 1rem;
+  }
+  .stat .v {
+    font-family: "IBM Plex Mono", monospace;
+    font-variant-numeric: tabular-nums;
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--seal);
+  }
+  .stat .k { font-size: 0.72rem; color: var(--ink-soft); margin-top: 0.15rem; }
+
+  section.chapter {
+    max-width: 700px;
+    padding-top: 3.4rem;
+    scroll-margin-top: 1.5rem;
+  }
+  section.chapter:first-of-type { padding-top: 0; }
+
+  .chapter-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.85rem;
+    margin-bottom: 1.1rem;
+  }
+  .chapter-num {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 1rem;
+    color: var(--seal);
+    border: 1px solid var(--seal-tint-strong);
+    background: var(--seal-tint);
+    border-radius: 7px;
+    padding: 0.15rem 0.55rem;
+  }
+  .chapter-head h2 { margin: 0; font-size: 1.55rem; }
+
+  p { margin: 0 0 1.05rem; }
+  ul, ol { margin: 0 0 1.05rem; padding-left: 1.3rem; }
+  li { margin-bottom: 0.4rem; }
+  strong { color: var(--ink); }
+
+  .callout {
+    border-left: 3px solid var(--seal);
+    background: var(--seal-tint);
+    border-radius: 0 10px 10px 0;
+    padding: 0.85rem 1.1rem;
+    margin: 1.3rem 0;
+    font-size: 0.95rem;
+  }
+  .callout .callout-label {
+    font-family: "IBM Plex Mono", monospace;
+    text-transform: uppercase;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    color: var(--seal);
+    display: block;
+    margin-bottom: 0.35rem;
+  }
+
+  .quote-subject {
+    border-left: 3px solid var(--brass);
+    background: var(--paper-raised);
+    border-radius: 0 10px 10px 0;
+    padding: 0.85rem 1.1rem;
+    margin: 1.3rem 0;
+    font-size: 0.92rem;
+    font-style: italic;
+    color: var(--ink-soft);
+  }
+  .quote-subject .callout-label {
+    font-family: "IBM Plex Mono", monospace;
+    text-transform: uppercase;
+    font-size: 0.68rem;
+    letter-spacing: 0.1em;
+    color: var(--brass);
+    display: block;
+    margin-bottom: 0.35rem;
+    font-style: normal;
+  }
+
+  /* --- Code blocks ---------------------------------------------------- */
+
+  .code-wrap { max-width: 100%; margin: 1.2rem 0 1.5rem; }
+  .code-label {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 0.72rem;
+    color: var(--ink-faint);
+    background: var(--paper-raised-2);
+    display: inline-block;
+    padding: 0.25rem 0.6rem;
+    border-radius: 6px 6px 0 0;
+    border: 1px solid var(--rule);
+    border-bottom: none;
+  }
+  pre.code {
+    margin: 0;
+    background: var(--code-bg);
+    color: var(--code-ink);
+    padding: 1rem 1.15rem;
+    border-radius: 0 10px 10px 10px;
+    overflow-x: auto;
+    font-size: 0.84rem;
+    line-height: 1.6;
+    box-shadow: 0 8px 24px var(--shadow);
+  }
+  pre.code .c { color: var(--code-ink-soft); font-style: italic; }
+  pre.code .k { color: var(--seal); }
+
+  /* --- Diagrams --------------------------------------------------- */
+
+  .diagram {
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    padding: 1.2rem;
+    margin: 1.4rem 0 1.6rem;
+    overflow-x: auto;
+  }
+  .diagram-caption {
+    font-size: 0.82rem;
+    color: var(--ink-soft);
+    margin-top: 0.6rem;
+    text-align: center;
+  }
+  .diagram svg { display: block; margin: 0 auto; }
+
+  /* --- Table ---------------------------------------------------- */
+
+  .tbl { width: 100%; border-collapse: collapse; margin: 1.2rem 0 1.6rem; font-size: 0.88rem; }
+  .tbl th, .tbl td { text-align: left; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--rule); }
+  .tbl th { font-family: "IBM Plex Mono", monospace; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-soft); font-weight: 500; }
+  .tbl td.num { font-family: "IBM Plex Mono", monospace; font-variant-numeric: tabular-nums; color: var(--seal); }
+  .tbl-wrap { overflow-x: auto; }
+
+  /* --- Q&A ---------------------------------------------------- */
+
+  .qa { border: 1px solid var(--rule); border-radius: 12px; margin-bottom: 0.9rem; overflow: hidden; background: var(--paper-raised); }
+  .qa .q {
+    font-family: "Source Serif 4", serif;
+    font-weight: 600;
+    font-size: 1rem;
+    padding: 0.9rem 1.1rem;
+    display: flex;
+    gap: 0.6rem;
+  }
+  .qa .q::before { content: "Q"; color: var(--seal); font-family: "IBM Plex Mono", monospace; font-weight: 600; }
+  .qa .a { padding: 0 1.1rem 1rem calc(1.1rem + 1.3em); font-size: 0.94rem; color: var(--ink-soft); }
+  .qa .a p:last-child { margin-bottom: 0; }
+
+  hr.rule { border: none; border-top: 1px solid var(--rule); margin: 2.6rem 0; }
+
+  footer.doc-end {
+    max-width: 700px;
+    color: var(--ink-faint);
+    font-size: 0.82rem;
+    padding-top: 1rem;
+  }
+
+  @media (max-width: 880px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { position: relative; height: auto; border-right: none; border-bottom: 1px solid var(--rule); padding: 1.4rem; }
+    main { padding: 2rem 1.2rem 4rem; }
+  }
+</style>
+
+<div class="layout">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="stones">
+        <span class="stone" style="background:var(--stone-black); box-shadow: inset 0 0 0 1px var(--stone-black-ring);"></span>
+        <span class="stone" style="background:var(--stone-white); box-shadow: inset 0 0 0 1px var(--stone-white-ring);"></span>
+        <span class="stone" style="background:var(--stone-black); box-shadow: inset 0 0 0 1px var(--stone-black-ring);"></span>
+      </span>
+      <span class="label">Gomoku — soutenance</span>
+    </div>
+    <nav id="toc">
+      <a class="toc-link" href="#ch0"><span class="toc-num">0</span>Architecture</a>
+      <a class="toc-link" href="#ch1"><span class="toc-num">1</span>Le plateau</a>
+      <a class="toc-link" href="#ch2"><span class="toc-num">2</span>Détection des menaces</a>
+      <a class="toc-link" href="#ch3"><span class="toc-num">3</span>Règles du jeu</a>
+      <a class="toc-link" href="#ch4"><span class="toc-num">4</span>L'heuristique</a>
+      <a class="toc-link" href="#ch5"><span class="toc-num">5</span>Minimax &amp; négamax</a>
+      <a class="toc-link" href="#ch6"><span class="toc-num">6</span>La recherche en pratique</a>
+      <a class="toc-link" href="#ch7"><span class="toc-num">7</span>Profondeur &amp; budget</a>
+      <a class="toc-link" href="#ch8"><span class="toc-num">8</span>Questions probables</a>
+    </nav>
+    <div class="sidebar-foot">
+      Basé sur le code réel de <span class="mono">bot/</span> (main.cpp, Gomoku.cpp, Gomoku.class.hpp). Chaque section renvoie aux fonctions à connaître par cœur pour la soutenance.
+    </div>
+  </aside>
+
+  <main>
+    <div class="masthead">
+      <p class="eyebrow">Préparation soutenance · Gomoku 42</p>
+      <h1>Comprendre le moteur, pas juste le réciter</h1>
+      <p class="dek">Ce carnet suit le code réel du bot, dans l'ordre où on l'expliquerait à quelqu'un qui ne connaît ni minimax ni le sujet. Chaque chapitre part d'une question du sujet, montre le code qui y répond, et explique pourquoi il est écrit comme ça.</p>
+      <div class="stat-strip">
+        <div class="stat"><div class="v">≥ 10</div><div class="k">plis garantis</div></div>
+        <div class="stat"><div class="v">460 ms</div><div class="k">budget normal</div></div>
+        <div class="stat"><div class="v">1500 ms</div><div class="k">plafond jusqu'au pli 10</div></div>
+        <div class="stat"><div class="v">6</div><div class="k">coups par nœud</div></div>
+        <div class="stat"><div class="v">2²¹</div><div class="k">entrées de la table</div></div>
+      </div>
+    </div>
+
+    <!-- ===================== CHAPITRE 0 ===================== -->
+    <section class="chapter" id="ch0">
+      <div class="chapter-head"><span class="chapter-num">0</span><h2>Architecture générale</h2></div>
+
+      <p>Le projet a deux moteurs séparés, et c'est une décision assumée, pas un oubli :</p>
+      <ul>
+        <li><strong>Frontend (Next.js/TypeScript)</strong> — <span class="mono">app/src/app/game/Gomoku.ts</span>. Gère l'affichage, valide les coups humains, calcule les cases interdites pour l'aide visuelle.</li>
+        <li><strong>Bot (C++, autonome)</strong> — <span class="mono">bot/</span>. Un exécutable qui ne connaît rien au web : il lit l'état de la partie sur <span class="mono">stdin</span>, réfléchit, écrit un coup sur <span class="mono">stdout</span>.</li>
+      </ul>
+      <p>Les deux réimplémentent les mêmes règles indépendamment. Ce n'est pas de la duplication paresseuse : le bot a besoin d'une représentation ultra-compacte (bitboards) pour explorer des centaines de milliers de positions par coup, alors que le frontend a besoin d'une représentation confortable à manipuler en JS. Partager le même moteur aurait sacrifié l'un des deux besoins.</p>
+
+      <div class="code-wrap">
+        <span class="code-label">app/src/app/api/bot/route.ts</span>
+        <pre class="code">const state = `${gridToken}${rulesPayload}\n${moves.map(([x,y]) => `|${x}:${y}`).join('')}`
+const result = execSync("./Gomoku", { cwd: BOT_CWD, input: state, timeout: 500000 }).toString()</pre>
+      </div>
+
+      <p>Le protocole tient en deux lignes : une chaîne de <strong>9 caractères</strong> décrivant les règles actives, puis la liste des coups déjà joués sous la forme <span class="mono">|x:y|x:y...</span>. Le bot répond avec son propre coup au même format. Le serveur ne recompile le C++ que si les sources ont changé (comparaison de timestamps) — recompiler à chaque coup aurait faussé le temps de réponse mesuré.</p>
+
+      <div class="callout">
+        <span class="callout-label">Point de soutenance</span>
+        Si on te demande "pourquoi deux implémentations ?", la réponse est : contrainte de performance. Le sujet impose 10 plis de recherche en 500ms ; ça n'est atteignable qu'avec une structure de données compacte (bitboards) et un langage compilé. Le frontend, lui, n'a besoin de valider qu'un seul coup humain à la fois.
+      </div>
+    </section>
+
+    <!-- ===================== CHAPITRE 1 ===================== -->
+    <section class="chapter" id="ch1">
+      <div class="chapter-head"><span class="chapter-num">1</span><h2>Représenter le plateau</h2></div>
+
+      <p>Trois briques, du plus petit au plus grand.</p>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Pos — une case</h3>
+      <p>Une position est deux <span class="mono">int8_t</span> (x, y). Rien de plus — pas de classe lourde, juste assez pour tenir dans un registre CPU et être copié sans coût.</p>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Stone — une pierre sur 2 bits</h3>
+      <div class="code-wrap">
+        <span class="code-label">Gomoku.class.hpp</span>
+        <pre class="code">enum type : uint8_t {
+    NONE  = 0b00, ERROR = 0b11,
+    BLACK = 0b01, WHITE = 0b10
+};</pre>
+      </div>
+      <p>Une case vide, noire ou blanche tient sur 2 bits : un bit "il y a une pierre noire ici", un bit "il y a une pierre blanche ici". <span class="mono">ERROR</span> (les deux bits à 1) ne devrait jamais arriver — une case ne peut pas porter les deux couleurs — mais le type est défini pour que ce cas soit détectable plutôt que silencieusement ignoré.</p>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">BitBoard — le plateau entier en quelques entiers</h3>
+      <p>C'est la pièce la plus technique. Un plateau 19×19 a 361 cases. Un <span class="mono">unsigned long long</span> a 64 bits, donc <strong>3 lignes de 19 cases tiennent dans un seul mot</strong> (57 bits utilisés sur 64). Il faut alors <span class="mono">⌈19/3⌉ = 7</span> mots pour couvrir tout le plateau — une des deux couleurs.</p>
+      <div class="code-wrap">
+        <span class="code-label">Gomoku.class.hpp</span>
+        <pre class="code">constexpr WORD wordof(const Pos &amp;pos) const { return words[pos.y / LINES_PER_WORD]; }
+constexpr size_t bitof(const Pos &amp;pos) const { return pos.x + (pos.y % LINES_PER_WORD) * X; }</pre>
+      </div>
+      <p>Poser une pierre, la retirer, tester une case : trois opérations bit-à-bit (<span class="mono">|=</span>, <span class="mono">&amp;= ~</span>, <span class="mono">&amp;</span>), chacune en O(1) réel — pas d'accès mémoire dispersé, tout tient dans quelques registres. C'est ce qui rend des centaines de milliers d'appels à <span class="mono">play()</span>/<span class="mono">undo()</span> par coup jouable en 460ms.</p>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Rules — la chaîne de 9 caractères</h3>
+      <p>Le bot reçoit les règles actives sous forme compacte : un caractère pour la taille de grille, puis 8 caractères pour les règles booléennes, chacun pouvant valoir <span class="mono">'0'</span>, <span class="mono">'1'</span> ou <span class="mono">'b'</span> (règle active seulement pour les noirs — utile pour le Renju, où certaines interdictions ne s'appliquent qu'au premier joueur).</p>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <tr><th>Index</th><th>Règle</th><th>Mandatory ?</th></tr>
+          <tr><td class="num">0</td><td>taille de grille (5=15×15, 9=19×19)</td><td>19×19 imposé</td></tr>
+          <tr><td class="num">1</td><td>pass autorisé</td><td>bonus</td></tr>
+          <tr><td class="num">2</td><td>capture activée</td><td>oui</td></tr>
+          <tr><td class="num">3</td><td>capture de fin de partie (five imparfait)</td><td>oui</td></tr>
+          <tr><td class="num">4</td><td>foul overline</td><td>bonus (Renju)</td></tr>
+          <tr><td class="num">5</td><td>overline compte comme victoire</td><td>oui (5+ gagne)</td></tr>
+          <tr><td class="num">6</td><td>double-trois interdit</td><td>oui</td></tr>
+          <tr><td class="num">7</td><td>double-quatre interdit</td><td>bonus</td></tr>
+          <tr><td class="num">8</td><td>flanking (règle Caro)</td><td>bonus</td></tr>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===================== CHAPITRE 2 ===================== -->
+    <section class="chapter" id="ch2">
+      <div class="chapter-head"><span class="chapter-num">2</span><h2>Détection des menaces</h2></div>
+
+      <p>Avant les règles et avant l'heuristique, il y a une seule fonction qui répond à une question précise : <em>« si je pose une pierre ici, quel alignement est-ce que ça forme, et à quel point est-il dangereux ? »</em>. C'est <span class="mono">threatAt()</span>, et presque tout le reste du moteur (légalité des coups, détection de victoire, heuristique) l'utilise directement ou indirectement.</p>
+
+      <div class="quote-subject">
+        <span class="callout-label">Le sujet dit</span>
+        « Un free-three est un alignement de trois pierres qui, s'il n'est pas immédiatement bloqué, permet un alignement indéfendable de quatre pierres (c'est-à-dire un quatre avec ses deux extrémités libres). »
+      </div>
+
+      <p><span class="mono">threatAt()</span> traduit cette définition presque mot pour mot, mais <strong>à l'envers et récursivement</strong> : plutôt que de regarder un trois et se demander "est-ce qu'il devient un quatre ouvert ?", elle part d'un cinq et remonte.</p>
+
+      <div class="diagram">
+        <svg viewBox="0 0 640 190" width="100%" height="190" role="img" aria-label="Échelle des menaces : trois ouvert, quatre ouvert, cinq">
+          <!-- row three -->
+          <g font-family="IBM Plex Mono, monospace" font-size="12">
+            <text x="10" y="24" fill="var(--ink-soft)">trois ouvert (O3)</text>
+            <g transform="translate(10,36)">
+              <!-- 6 cells -->
+              <g id="cellsA"></g>
+            </g>
+
+            <text x="10" y="100" fill="var(--ink-soft)">→ si étendu : quatre ouvert (O4)</text>
+            <g transform="translate(10,112)">
+              <g id="cellsB"></g>
+            </g>
+
+            <text x="10" y="176" fill="var(--ink-soft)">→ si étendu encore : cinq (victoire)</text>
+          </g>
+        </svg>
+        <div class="diagram-caption">threatAt place virtuellement une pierre une case plus loin (threatOf) et se demande : « est-ce que ça fait un cinq ? ». Si oui des deux côtés → four ouvert. Si un four ouvert est atteignable des deux côtés depuis un trois → three ouvert.</div>
+      </div>
+
+      <div class="code-wrap">
+        <span class="code-label">Gomoku.cpp — threatAt (extraits clés)</span>
+        <pre class="code">const Threat ext0 = threatOf(beforeStart, dir, player, min + 1);  <span class="c">// et si j'étends à gauche…</span>
+const Threat ext1 = threatOf(afterEnd,    dir, player, min + 1);  <span class="c">// …et si j'étends à droite ?</span>
+
+if (is5_0 &amp;&amp; is5_1)
+    return {len == 4 ? ThreatType::O4 : ThreatType::FourFour, ...};  <span class="c">// four ouvert</span>
+
+if (isO4_0 || isO4_1)
+    return {ThreatType::O3, ...};  <span class="c">// three qui MÈNE à un four ouvert</span></pre>
+      </div>
+
+      <p><span class="mono">threatOf()</span> est le pivot : il pose une pierre hypothétique (<span class="mono">rawPlace</span>), appelle <span class="mono">threatAt()</span> sur cette pierre imaginaire, puis la retire (<span class="mono">rawRemove</span>). C'est une simulation, pas une vraie action de jeu — rien n'est enregistré dans l'historique.</p>
+
+      <p>Le paramètre <span class="mono">min</span> sert à couper la récursion tôt quand on n'a besoin que d'une réponse partielle : <span class="mono">applyMove()</span> ne cherche que des cinq (<span class="mono">min=5</span>, pas besoin de descendre plus bas), alors que <span class="mono">isLegalMove()</span> a besoin de tout, y compris les three (<span class="mono">min=3</span>).</p>
+
+      <div class="callout">
+        <span class="callout-label">Point de soutenance</span>
+        Insiste sur le fait que la fonction ne "sait" pas ce qu'est un three ou un four au sens abstrait — elle sait seulement classer un alignement par sa longueur et poser la question récursive "et si j'ajoute une pierre au bout, ça devient quoi ?". La hiérarchie O3 → O4 → Five émerge de cette seule question posée deux fois de suite.
+      </div>
+    </section>
+
+    <!-- ===================== CHAPITRE 3 ===================== -->
+    <section class="chapter" id="ch3">
+      <div class="chapter-head"><span class="chapter-num">3</span><h2>Les règles du jeu</h2></div>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Capture — flanquer une paire</h3>
+      <p>À chaque coup, <span class="mono">play()</span> teste les 8 directions autour de la pierre posée. Le motif cherché est <strong>adversaire, adversaire, moi</strong> à trois cases de distance :</p>
+      <div class="code-wrap">
+        <span class="code-label">Gomoku.cpp — play()</span>
+        <pre class="code">const Pos pos0 = move + dir;      <span class="c">// adversaire ?</span>
+const Pos pos1 = pos0 + dir;      <span class="c">// adversaire ?</span>
+const Pos pos2 = pos1 + dir;      <span class="c">// moi ?</span>
+if (stones[!player][pos0] &amp;&amp; stones[!player][pos1] &amp;&amp; stones[player][pos2]) {
+    stones[!player] -= pos0; stones[!player] -= pos1;   <span class="c">// capture</span>
+    captures[player] += 2;
+}</pre>
+      </div>
+      <p>Le <span class="mono">cap_mask</span> (16 bits, 8 utilisés) est calculé une fois par coup pour éviter de tester les directions qui sortiraient du plateau, puis affiné direction par direction : chaque bit qui a effectivement capturé reste à 1. Ce masque exact est stocké dans l'historique du coup (<span class="mono">Move::captures</span>) — <span class="mono">undo()</span> n'a donc pas besoin de recalculer quoi que ce soit, il relit simplement quelles directions ont capturé et restaure les pierres correspondantes.</p>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Victoire par capture (10 pierres)</h3>
+      <p>Vérifiée en une ligne dans <span class="mono">applyMove()</span> : <span class="mono">captures[mover] &gt;= 10</span>. Le cas des deux joueurs atteignant 10 en même temps (auto-capture) est traité comme match nul plutôt que de choisir arbitrairement un gagnant.</p>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Capture de fin de partie — le five "imparfait"</h3>
+      <div class="quote-subject">
+        <span class="callout-label">Le sujet dit</span>
+        « Un joueur qui aligne cinq pierres ne gagne que si l'adversaire ne peut pas casser cette ligne par une capture. »
+      </div>
+      <p>C'est le mécanisme le plus subtil du moteur : <span class="mono">delayedWin</span>. Quand un five est formé mais qu'une de ses pierres fait partie d'une paire capturable (<span class="mono">isUnperfect5</span>), la victoire n'est <strong>pas</strong> immédiate : le drapeau est levé et la partie continue un tour de plus.</p>
+      <div class="code-wrap">
+        <span class="code-label">Gomoku.cpp — applyMove()</span>
+        <pre class="code"><span class="c">// tour suivant : la ligne a-t-elle survécu au coup de l'adversaire ?</span>
+if (outcome.state == Result::Ongoing &amp;&amp; wasDelayed) {
+    bool intact = /* toutes les pierres de la ligne sont encore là */;
+    if (!intact) delayedWin = false;              <span class="c">// cassée : la partie continue normalement</span>
+    else outcome = {Result::Win, dPlayer};         <span class="c">// intacte : victoire (validée avec un tour de retard)</span>
+}</pre>
+      </div>
+      <p>L'ordre des vérifications dans <span class="mono">applyMove()</span> compte : le contrôle des 10 captures passe <em>avant</em> la résolution du <span class="mono">delayedWin</span>. Si le coup qui casse la ligne est justement le coup qui fait atteindre 10 captures à son auteur, celui-ci gagne par capture — exactement la deuxième puce du sujet ("si l'adversaire a déjà perdu quatre paires et que l'autre peut en capturer une de plus, il gagne").</p>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Interdiction du double-trois</h3>
+      <div class="quote-subject">
+        <span class="callout-label">Le sujet dit</span>
+        « Il n'est pas interdit d'introduire un double-trois en capturant une paire. »
+      </div>
+      <p><span class="mono">isLegalMove()</span> place la pierre hypothétiquement, collecte toutes les menaces dans les 4 directions, puis retire la pierre. Deux menaces <span class="mono">O3</span> ou plus → coup refusé. Mais avant même de vérifier ça :</p>
+      <div class="code-wrap">
+        <span class="code-label">Gomoku.cpp — isLegalMove()</span>
+        <pre class="code"><span class="c">// Un coup qui capture ou gagne échappe aux règles de forme interdite</span>
+if (winning || (rules.capture &amp;&amp; wouldCapture(pos, player)))
+    return true;</pre>
+      </div>
+      <p>C'est la traduction directe de la citation ci-dessus : un coup qui capture une paire est exempté de la vérification double-trois, quoi qu'il en soit de sa forme.</p>
+
+      <div class="callout">
+        <span class="callout-label">Point de soutenance</span>
+        Si le grader teste le double-trois : joue un coup qui crée deux three ouverts simultanément sur un plateau vide de captures → refusé. Puis rejoue la même position avec une paire adverse capturable par ce coup → accepté. Ça démontre les deux règles en une seule manipulation.
+      </div>
+    </section>
+
+    <!-- ===================== CHAPITRE 4 ===================== -->
+    <section class="chapter" id="ch4">
+      <div class="chapter-head"><span class="chapter-num">4</span><h2>L'heuristique</h2></div>
+
+      <p>Le sujet le dit sans détour : l'heuristique est la partie la plus difficile, parce que Minimax lui-même ne fait "que" comparer des nombres — encore faut-il que ces nombres reflètent qui est en train de gagner sur un plateau qui n'est pas terminé.</p>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">patternWeight — la table de poids</h3>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <tr><th>Forme</th><th>Poids</th><th>Pourquoi</th></tr>
+          <tr><td>Cinq</td><td class="num">100 000</td><td>partie gagnée</td></tr>
+          <tr><td>Quatre ouvert (.XXXX.)</td><td class="num">15 000</td><td>imparable — deux façons de faire cinq</td></tr>
+          <tr><td>Quatre fermé (XXXX.)</td><td class="num">2 000</td><td>menace réelle mais bloquable</td></tr>
+          <tr><td>Trois ouvert (.XXX.)</td><td class="num">800</td><td>free-three : mène à un quatre ouvert</td></tr>
+          <tr><td>Trois fermé</td><td class="num">150</td><td>faible, un seul prolongement possible</td></tr>
+          <tr><td>Deux ouvert</td><td class="num">40</td><td>potentiel à long terme</td></tr>
+          <tr><td>Deux fermé</td><td class="num">10</td><td>presque négligeable</td></tr>
+        </table>
+      </div>
+      <p>Le saut 800 → 15 000 entre trois ouvert et quatre ouvert n'est pas arbitraire : c'est exactement le point où une menace passe de "gênante" à "imparable" (le sujet : un four ouvert a "deux extrémités non obstruées"). L'heuristique doit refléter cette rupture qualitative, pas juste croître régulièrement.</p>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">evaluate() — la fonction de feuille</h3>
+      <div class="code-wrap">
+        <span class="code-label">main.cpp — evaluate()</span>
+        <pre class="code">Gomoku::forall([&amp;](Pos pos){
+    <span class="c">// ... pour chaque pierre qui est le DÉBUT de son alignement ...</span>
+    score[player] += patternWeight(len, extrémités ouvertes);
+});
+score[0] += W_CAPTURE * captures(0)²;
+score[1] += W_CAPTURE * captures(1)²;
+
+return score[toMove] - score[!toMove];   <span class="c">// convention négamax</span></pre>
+      </div>
+      <p>Deux détails qui comptent :</p>
+      <ul>
+        <li><strong>Compter chaque alignement une seule fois.</strong> On ne compte un alignement que depuis sa première pierre (<span class="mono">prev</span> n'est pas la même couleur), sinon un alignement de 4 pierres serait compté 4 fois.</li>
+        <li><strong>Bonus de capture quadratique.</strong> <span class="mono">captures²</span> plutôt que <span class="mono">captures</span> : passer de 2 à 4 captures compte peu, mais passer de 8 à 10 (qui gagne la partie) doit peser énormément plus. Le carré fait croître l'urgence en même temps qu'on se rapproche de la victoire par capture, sans avoir besoin d'un cas spécial.</li>
+      </ul>
+      <p>Le score final est toujours <em>du point de vue du joueur qui doit jouer</em> (<span class="mono">score[toMove] - score[!toMove]</span>) — c'est la convention négamax, expliquée au chapitre suivant.</p>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Le même calcul, recyclé pour trier les coups</h3>
+      <p><span class="mono">localPatternScore()</span> est la même idée que <span class="mono">patternWeight</span>, mais appliquée à une seule pierre hypothétique plutôt qu'au plateau entier — utilisée par <span class="mono">generateCandidates()</span> pour classer les coups avant même de lancer la recherche (voir chapitre 6). Un seul concept, deux usages : noter une position finale, et pré-trier les coups à explorer en premier.</p>
+    </section>
+
+    <!-- ===================== CHAPITRE 5 ===================== -->
+    <section class="chapter" id="ch5">
+      <div class="chapter-head"><span class="chapter-num">5</span><h2>Minimax &amp; négamax</h2></div>
+
+      <p>L'idée de base de Minimax, sans code : à chaque tour, un joueur choisit le coup qui <strong>maximise</strong> son score, en supposant que l'adversaire, à son tour, choisira toujours le coup qui le <strong>minimise</strong>. On construit un arbre de tous les coups possibles, et on remonte les scores depuis les feuilles (positions finales ou limite de profondeur) jusqu'à la racine, en alternant max et min à chaque niveau.</p>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Pourquoi négamax plutôt que minimax "classique" ?</h3>
+      <p>Gomoku est un jeu à somme nulle et symétrique : ce qui est bon pour moi est exactement aussi mauvais pour mon adversaire, d'une magnitude égale. Ça permet une simplification élégante : au lieu d'écrire deux fonctions (une qui maximise, une qui minimise), <strong>une seule fonction</strong> maximise toujours, du point de vue du joueur au trait — et on neutralise l'alternance en inversant le signe à chaque appel récursif.</p>
+      <div class="code-wrap">
+        <span class="code-label">main.cpp — negamax()</span>
+        <pre class="code">v = -negamax(state, depth - 1, -beta, -alpha);</pre>
+      </div>
+      <p>Le signe moins dit : "le score de mon adversaire, c'est l'opposé du mien". La fenêtre <span class="mono">[alpha, beta]</span> est aussi inversée et permutée en <span class="mono">[-beta, -alpha]</span> — c'est la même bascule de perspective appliquée aux bornes de l'élagage.</p>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">L'élagage alpha-bêta</h3>
+      <p>Explorer tout l'arbre serait beaucoup trop lent (branchement 6, profondeur 10 → 6¹⁰ ≈ 60 milliards de nœuds). Alpha-bêta permet de couper des branches entières <strong>sans changer le résultat</strong> : dès qu'on prouve qu'un coup est "assez mauvais" pour que l'adversaire ne le laisse jamais arriver, plus la peine de l'explorer en détail.</p>
+      <ul>
+        <li><span class="mono">alpha</span> — le meilleur score que <strong>je</strong> peux déjà garantir sur cette branche.</li>
+        <li><span class="mono">beta</span> — le meilleur score que <strong>l'adversaire</strong> peut déjà garantir plus haut dans l'arbre.</li>
+        <li>Si <span class="mono">alpha &gt;= beta</span>, l'adversaire a ailleurs une option au moins aussi bonne pour lui — il ne laissera jamais la partie arriver ici. Couper.</li>
+      </ul>
+
+      <div class="diagram">
+        <svg viewBox="0 0 640 260" width="100%" height="260" role="img" aria-label="Arbre négamax avec une branche coupée par alpha-bêta">
+          <g stroke="var(--ink-faint)" stroke-width="1.4" fill="none">
+            <line x1="320" y1="34" x2="140" y2="120"/>
+            <line x1="320" y1="34" x2="500" y2="120"/>
+            <line x1="140" y1="120" x2="70"  y2="210"/>
+            <line x1="140" y1="120" x2="210" y2="210"/>
+            <line x1="500" y1="120" x2="430" y2="210"/>
+            <line x1="500" y1="120" x2="570" y2="210" stroke-dasharray="4 4"/>
+          </g>
+          <g font-family="IBM Plex Mono, monospace" font-size="12" text-anchor="middle">
+            <circle cx="320" cy="34" r="15" fill="var(--paper)" stroke="var(--seal)" stroke-width="2"/>
+            <text x="320" y="38" fill="var(--seal)">racine</text>
+
+            <circle cx="140" cy="120" r="14" fill="var(--paper-raised-2)" stroke="var(--ink-faint)" stroke-width="1.4"/>
+            <text x="140" y="124" fill="var(--ink)">A</text>
+            <circle cx="500" cy="120" r="14" fill="var(--paper-raised-2)" stroke="var(--ink-faint)" stroke-width="1.4"/>
+            <text x="500" y="124" fill="var(--ink)">B</text>
+
+            <circle cx="70"  cy="210" r="13" fill="var(--paper-raised)" stroke="var(--ink-faint)" stroke-width="1.2"/>
+            <text x="70" y="214" fill="var(--ink-soft)">+3</text>
+            <circle cx="210" cy="210" r="13" fill="var(--paper-raised)" stroke="var(--ink-faint)" stroke-width="1.2"/>
+            <text x="210" y="214" fill="var(--ink-soft)">+7</text>
+
+            <circle cx="430" cy="210" r="13" fill="var(--paper-raised)" stroke="var(--ink-faint)" stroke-width="1.2"/>
+            <text x="430" y="214" fill="var(--ink-soft)">+2</text>
+            <circle cx="570" cy="210" r="13" fill="var(--paper)" stroke="var(--ink-faint)" stroke-width="1.2" stroke-dasharray="3 3" opacity="0.5"/>
+            <text x="570" y="214" fill="var(--ink-faint)" opacity="0.6">?</text>
+
+            <text x="570" y="238" fill="var(--seal)" font-size="11">coupé</text>
+          </g>
+        </svg>
+        <div class="diagram-caption">A a déjà garanti +7 (le mieux entre +3 et +7). B trouve d'abord +2 : puisque la racine choisira le pire des deux nœuds pour l'adversaire (ici, dans une vraie alternance min/max), dès que le score courant de B ne peut plus dépasser ce que A garantit déjà, la dernière branche de B (« ? ») n'a plus besoin d'être regardée en détail — quel que soit son score, il ne changera pas le choix final.</div>
+      </div>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Le score de victoire dépend de la profondeur</h3>
+      <div class="code-wrap">
+        <span class="code-label">main.cpp</span>
+        <pre class="code">if (outcome.state == Result::Win)
+    v = MATE_SCORE + depth;</pre>
+      </div>
+      <p><span class="mono">depth</span> ici est la profondeur <em>restante</em> au moment où la victoire est trouvée. Une victoire trouvée près de la racine (beaucoup de profondeur restante) obtient un score légèrement plus élevé qu'une victoire trouvée très profondément dans l'arbre. Résultat : entre deux façons de gagner, le bot préfère toujours <strong>la plus rapide</strong> — un détail qui évite qu'il traîne une victoire déjà acquise.</p>
+
+      <div class="callout">
+        <span class="callout-label">Point de soutenance</span>
+        Si on te demande "pourquoi minimax marche même si l'adversaire n'est pas parfait" — la réponse honnête : l'algorithme suppose un adversaire optimal par construction (c'est une garantie de robustesse, pas une prédiction). Contre un joueur imparfait, le bot ne perd jamais de terrain qu'il n'aurait pas dû céder ; il peut simplement rater des opportunités qu'un adversaire faible lui offre sans le vouloir — mais l'heuristique de motif (chapitre 4) capture déjà ces largesses dès qu'elles apparaissent sur le plateau.
+      </div>
+    </section>
+
+    <!-- ===================== CHAPITRE 6 ===================== -->
+    <section class="chapter" id="ch6">
+      <div class="chapter-head"><span class="chapter-num">6</span><h2>La recherche en pratique</h2></div>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Générer des coups : pas les 361 cases</h3>
+      <p>Explorer les 361 cases à chaque nœud serait absurde — la quasi-totalité du plateau est loin de toute pierre et n'a aucun intérêt tactique. <span class="mono">generateCandidates()</span> applique trois filtres en cascade :</p>
+      <ol>
+        <li><strong>Boîte englobante</strong> — ne scanner que la zone qui a déjà vu des pierres (+1 case de marge), pas le plateau entier.</li>
+        <li><strong>Voisinage</strong> — la case doit toucher une pierre existante (les 8 <span class="mono">SUBDIRECTIONS</span>).</li>
+        <li><strong>Score et coupe à 6</strong> — chaque candidat reçoit un score cheap (<span class="mono">localPatternScore</span> pour soi + 0.8× pour ce que ça bloque chez l'adversaire), et seuls les <span class="mono">MAX_BRANCH = 6</span> meilleurs sont gardés.</li>
+      </ol>
+      <p>La légalité complète (<span class="mono">isLegalMove</span>, coûteuse car récursive) n'est vérifiée <strong>qu'à la racine</strong>. À l'intérieur de l'arbre, on explore des coups géométriquement plausibles sans revalider le double-trois à chaque nœud — seule la détection de victoire (toujours exacte) coupe réellement l'arbre. Compromis assumé : le coup <em>réellement joué</em> est toujours garanti légal ; une branche hypothétique profonde peut, dans de rares cas, explorer un coup qui aurait été interdit s'il avait été proposé pour de vrai.</p>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Iterative deepening</h3>
+      <p>Plutôt que de lancer directement une recherche à profondeur 10 (qui peut dépasser le budget), le bot cherche à profondeur 1, puis 2, puis 3… en gardant à chaque fois le meilleur coup de la <strong>dernière profondeur entièrement terminée</strong>. Si le temps s'épuise en pleine profondeur 8, le résultat de la profondeur 7 (complète) est conservé — jamais un résultat à moitié calculé.</p>
+      <div class="code-wrap">
+        <span class="code-label">main.cpp — boucle principale</span>
+        <pre class="code">for (int depth = 1; depth &lt;= MAX_DEPTH; depth++) {
+    try {
+        auto [move, score] = rootSearch(state, depth);
+        bestMove = move; depthReached = depth;
+        if (score >= MATE_SCORE) break;   <span class="c">// victoire certaine trouvée, inutile de creuser plus</span>
+    } catch (SearchAborted&amp;) { break; }    <span class="c">// budget de temps épuisé en cours de calcul</span>
+}</pre>
+      </div>
+      <p>Bénéfice caché : la profondeur N réutilise le meilleur coup trouvé à la profondeur N-1 (via la table de transposition) pour trier ses candidats en premier — une recherche profonde qui commence par le coup probablement le meilleur coupe beaucoup plus tôt avec alpha-bêta.</p>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">La table de transposition (Zobrist)</h3>
+      <p>Deux ordres de coups différents peuvent mener exactement à la même position (jouer A puis B, ou B puis A). Sans mémoire, le moteur ré-explorerait cette position depuis zéro à chaque fois. Le hash de Zobrist résout ça : une clé aléatoire fixe par (case, couleur), XORée à chaque pose/retrait, donne un identifiant 64 bits de la position, maintenu incrémentalement en O(1) par coup (jamais recalculé en entier).</p>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <tr><th>Drapeau TT</th><th>Signification</th></tr>
+          <tr><td><span class="mono">Exact</span></td><td>le score stocké est la vraie valeur de la position</td></tr>
+          <tr><td><span class="mono">Lower</span></td><td>coupure béta : la vraie valeur est <em>au moins</em> ce score</td></tr>
+          <tr><td><span class="mono">Upper</span></td><td>aucun coup n'a dépassé alpha : la vraie valeur est <em>au plus</em> ce score</td></tr>
+        </table>
+      </div>
+      <p>2²¹ (≈ 2 millions) entrées, remplacement systématique (pas de politique complexe) : à cette échelle, l'essentiel du gain vient déjà du simple fait d'éviter le travail dupliqué.</p>
+    </section>
+
+    <!-- ===================== CHAPITRE 7 ===================== -->
+    <section class="chapter" id="ch7">
+      <div class="chapter-head"><span class="chapter-num">7</span><h2>Profondeur garantie &amp; budget de temps</h2></div>
+
+      <div class="quote-subject">
+        <span class="callout-label">Le sujet dit</span>
+        « Votre IA doit chercher au moins 10 niveaux de profondeur dans son arbre de jeu. » — et séparément — « Si votre IA prend plus d'une demi-seconde <em>en moyenne</em> pour trouver un coup, vous ne validerez pas le projet. »
+      </div>
+
+      <p>Ces deux contraintes sont en tension : une position calme et ouverte (peu de menaces, donc peu de coupures alpha-bêta) peut demander beaucoup plus de temps pour atteindre le pli 10 qu'une position tactique dense. Le compromis retenu utilise deux budgets de temps différents selon la profondeur :</p>
+
+      <div class="code-wrap">
+        <span class="code-label">main.cpp</span>
+        <pre class="code">deadline = start + (depth &lt;= MIN_DEPTH ? HARD_BUDGET : TIME_BUDGET);
+<span class="c">// MIN_DEPTH = 10, HARD_BUDGET = 1500ms, TIME_BUDGET = 460ms</span></pre>
+      </div>
+      <ul>
+        <li>Pour atteindre les profondeurs 1 à 10, le bot dispose d'un plafond large (1500ms) — largement suffisant en pratique, mais qui empêche une position pathologique de couper la recherche avant le pli 10 exigé.</li>
+        <li>Au-delà du pli 10, c'est le vrai budget (460ms, sous les 500ms imposés) qui s'applique — chercher plus loin est un bonus de qualité, pas une obligation.</li>
+      </ul>
+      <p>Pour que le plafond de 1500ms reste rarement sollicité, <span class="mono">MAX_BRANCH</span> a été réduit de 8 à 6 : moins de branches à explorer par nœud, donc le pli 10 est atteint bien avant le plafond dans l'immense majorité des positions (mesuré : ~460-660ms sur les positions les plus difficiles testées, largement sous 1500ms).</p>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Le timer affiché à l'écran</h3>
+      <p>Exigence non négociable du sujet ("no timer, no project validation"). Le temps est mesuré côté serveur (<span class="mono">route.ts</span>, autour de l'appel au binaire), transmis au frontend, et affiché en direct dans l'interface pendant que le bot réfléchit.</p>
+      <div class="code-wrap">
+        <span class="code-label">route.ts → page.tsx</span>
+        <pre class="code">const startTime = Date.now()
+const result = execSync("./Gomoku", { ... })
+const time = Date.now() - startTime
+<span class="c">// affiché ensuite : `${botResponseMs} ms`</span></pre>
+      </div>
+    </section>
+
+    <!-- ===================== CHAPITRE 8 ===================== -->
+    <section class="chapter" id="ch8">
+      <div class="chapter-head"><span class="chapter-num">8</span><h2>Questions probables en soutenance</h2></div>
+
+      <div class="qa">
+        <div class="q">Pourquoi négamax et pas minimax "à deux fonctions" ?</div>
+        <div class="a"><p>Parce que Gomoku est symétrique à somme nulle : mon gain est exactement la perte de l'adversaire. Une seule fonction qui maximise toujours du point de vue du joueur au trait, avec un signe inversé à chaque appel récursif, produit le même résultat que deux fonctions min/max séparées — avec moitié moins de code à maintenir et à expliquer.</p></div>
+      </div>
+      <div class="qa">
+        <div class="q">L'élagage alpha-bêta change-t-il le résultat par rapport à un minimax complet ?</div>
+        <div class="a"><p>Non, jamais. Il ne coupe que des branches dont on peut prouver qu'elles ne changeront pas la décision finale à la racine. C'est une optimisation de vitesse pure, à résultat identique.</p></div>
+      </div>
+      <div class="qa">
+        <div class="q">Comment garantissez-vous exactement 10 plis, tout le temps ?</div>
+        <div class="a"><p>Un budget de temps généreux (1500ms) s'applique tant que la profondeur cible n'a pas atteint 10 ; le budget réel de 460ms ne s'applique qu'au-delà. Combiné à un branchement réduit (6 coups par nœud), le pli 10 est atteint bien avant ce plafond dans la quasi-totalité des positions testées.</p></div>
+      </div>
+      <div class="qa">
+        <div class="q">Pourquoi ne pas vérifier la légalité complète (double-trois) à chaque nœud de l'arbre ?</div>
+        <div class="a"><p>C'est une vérification récursive, donc coûteuse — se la payer à chaque nœud interdirait d'atteindre la profondeur 10 dans le budget imposé. Le compromis : elle est garantie exacte à la racine (le coup réellement joué est toujours 100% légal), et la détection de victoire/nulle en profondeur reste toujours exacte — seule l'hypothèse "ce coup imaginaire, s'il était vraiment joué, serait-il un double-trois interdit ?" est laissée de côté au fond de l'arbre.</p></div>
+      </div>
+      <div class="qa">
+        <div class="q">Pourquoi un bonus quadratique sur les captures dans l'heuristique ?</div>
+        <div class="a"><p>Pour que l'urgence de la victoire par capture (10 pierres) croisse avec la proximité du seuil, sans code spécial. Le carré fait que passer de 8 à 10 captures pèse bien plus lourd que passer de 0 à 2, ce qui reflète la réalité du jeu : à 8 captures, une seule paire de plus gagne la partie.</p></div>
+      </div>
+      <div class="qa">
+        <div class="q">Comment la table de transposition évite-t-elle les collisions ?</div>
+        <div class="a"><p>Elle ne les évite pas complètement — c'est une table à taille fixe (2²¹ entrées) avec remplacement systématique. Chaque entrée stocke aussi la clé complète (64 bits), donc une collision d'index (deux positions différentes tombant sur la même case de la table) est détectée en comparant les clés avant d'utiliser l'entrée — elle n'est jamais utilisée à tort, seulement pas retrouvée si elle a été écrasée entre-temps.</p></div>
+      </div>
+      <div class="qa">
+        <div class="q">Que se passe-t-il si le bot n'a plus aucun coup légal ?</div>
+        <div class="a"><p><span class="mono">generateCandidates()</span> peut retourner une liste vide ; c'est vérifié explicitement avant de lancer la recherche (dans <span class="mono">main()</span>), pour ne jamais appeler <span class="mono">rootSearch()</span> sur une liste vide — ce qui garantit qu'aucun coup n'est renvoyé plutôt que de planter, conformément à l'exigence du sujet de ne jamais crasher.</p></div>
+      </div>
+    </section>
+
+    <hr class="rule" />
+    <footer class="doc-end">
+      Document de préparation personnelle — pas un livrable du projet. Toutes les références de code pointent vers <span class="mono">bot/src/main.cpp</span>, <span class="mono">bot/src/Gomoku.cpp</span> et <span class="mono">bot/inc/Gomoku.class.hpp</span> dans l'état actuel du dépôt.
+    </footer>
+  </main>
+</div>
+
+<script>
+(function () {
+  // Dessine les mini-plateaux de l'échelle des menaces (chapitre 2) en JS
+  // pour rester DRY plutôt que de coder 3 x 6 cellules SVG à la main.
+  function drawRow(id, pattern) {
+    var g = document.getElementById(id);
+    if (!g) return;
+    var cell = 34, gap = 4;
+    pattern.forEach(function (v, i) {
+      var x = i * (cell + gap);
+      var rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      rect.setAttribute("x", x); rect.setAttribute("y", 0);
+      rect.setAttribute("width", cell); rect.setAttribute("height", cell);
+      rect.setAttribute("rx", 6);
+      rect.setAttribute("fill", "var(--paper)");
+      rect.setAttribute("stroke", "var(--rule)");
+      g.appendChild(rect);
+      if (v) {
+        var c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        c.setAttribute("cx", x + cell / 2); c.setAttribute("cy", cell / 2);
+        c.setAttribute("r", cell / 2 - 5);
+        c.setAttribute("fill", "var(--stone-black)");
+        g.appendChild(c);
+      }
+    });
+  }
+  drawRow("cellsA", [0,1,1,1,0,0]);
+  drawRow("cellsB", [0,1,1,1,1,0]);
+
+  var links = Array.prototype.slice.call(document.querySelectorAll(".toc-link"));
+  var sections = links.map(function (a) {
+    return document.querySelector(a.getAttribute("href"));
+  });
+  function onScroll() {
+    var pos = window.scrollY + 120;
+    var activeIdx = 0;
+    sections.forEach(function (sec, i) {
+      if (sec && sec.offsetTop <= pos) activeIdx = i;
+    });
+    links.forEach(function (a, i) { a.classList.toggle("active", i === activeIdx); });
+  }
+  document.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+})();
+</script>

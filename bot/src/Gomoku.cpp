@@ -15,10 +15,9 @@ std::ostream &operator<<(std::ostream &o, Gomoku const &gomoku) {
 
 void Gomoku::play(Pos move) {
 	const bool player = this->player();
-	uint16_t cap_mask = 0b111'1'1'111; // Top 8 bits are free in case of self-capture rules
+	uint16_t cap_mask = 0b111'1'1'111; // les 8 bits hauts restent libres
 	const int8_t max_capture_anchor = (int8_t)rules.boardSize - 4;
 
-	//std::cerr << "Do move " << move << std::endl;
 	assert(move.valid() && stone(move).empty());
 
 	if (move.x < 3 ) cap_mask &= (uint16_t)0b110'1'0'110;
@@ -55,13 +54,11 @@ void Gomoku::play(Pos move) {
 }
 
 void Gomoku::undo() {
-	//std::cout << "Undo move " << move << std::endl;
 	const Move record = moves.back();
 	const auto [move, cap_mask, delayedWinBefore, delayedLine, delayedDirBefore, delayedPlayerBefore] = record;
 	moves.pop_back();
 
-	// Computed after the pop so turn()/player() reflect the state as if
-	// this move had never been played, i.e. the mover of the undone move.
+	// Calculé après le pop : player() redevient celui qui a joué ce coup.
 	const bool player = this->player();
 
 	hash ^= zobristSideKey();
@@ -109,7 +106,7 @@ Pos Gomoku::runEnd(Pos pos, Pos dir, bool player) const {
 	return p;
 }
 
-// Assumes `pos` already holds `player`'s stone (contract shared with getThreats).
+// Suppose que `pos` contient déjà la pierre de `player` (comme getThreats).
 Threat Gomoku::threatAt(Pos pos, Pos dir, bool player, int min) {
 	const Pos start = runStart(pos, dir, player);
 	const Pos end = runEnd(pos, dir, player);
@@ -230,8 +227,8 @@ bool Gomoku::isLegalMove(Pos pos, bool player) {
 	for (const Threat &t : threats)
 		if (t.type == ThreatType::Five) { winning = true; break; }
 
-	// A move that captures or wins is exempt from the forbidden-shape rules,
-	// mirroring the frontend's resolveMove().
+	// Un coup qui capture ou gagne échappe aux règles de forme interdite
+	// (même logique que resolveMove() côté frontend).
 	if (winning || (rules.capture && wouldCapture(pos, player)))
 		return true;
 

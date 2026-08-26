@@ -6,7 +6,7 @@ const manrope = Manrope({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
   title: 'Gomoku 42',
-  description: 'Gomoku boilerplate for Next.js App Router with local mode and mock AI.',
+  description: 'Gomoku avec IA minimax en C++, mode local et mode entraînement.',
 }
 
 export default function RootLayout({

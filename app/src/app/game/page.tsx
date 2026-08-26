@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import GomokuBoard from '../components/gomoku/GomokuBoard'
 import { Gomoku } from './Gomoku'
@@ -11,7 +11,6 @@ import HelpModal, { RULE_MODALS } from '../components/rules/HelpModal'
 import type { Player, Rules } from './Gomoku'
 
 type GameMode = 'local' | 'ai' | 'training'
-import type { RuleModal } from '../components/rules/HelpModal'
 
 function getGaugeLabel(tone: 'black' | 'white', mode: GameMode) {
   if (tone === 'black')
@@ -35,7 +34,6 @@ function GamePageContent() {
     fourFour: false,
     flanking: false,
     pass: true,
-    swap2: false,
     grid: "19x19"
   }
   
@@ -64,7 +62,6 @@ function GamePageContent() {
     readBoolean('capture')
     readBoolean('captureUnperfect')
     readBoolean('foulOverline')
-    readBoolean('swap2')
 
     readPlayerRule('overline')
     readPlayerRule('threeThree')
@@ -82,7 +79,6 @@ function GamePageContent() {
 
   const [botResponseMs, setBotResponseMs] = useState<"pending" | number | null>(null)
   const [showRules, setShowRules] = useState(false)
-  const [activeCategory, setActiveCategory] = useState<RuleModal['category']>('General')
   const [turn, setTurn] = useState<number>(0)
   const [score, setScore] = useState<[number,number]>([0,0])
   const [currentPlayer, setCurrentPlayer] = useState<Player>(0)
@@ -92,8 +88,6 @@ function GamePageContent() {
     router.replace('/')
     return
   }
-
-  const categories = useMemo(() => ['Victory', 'Capture', 'Forbidden'] as const, [])
 
   const handleGameUpdate = (game: Gomoku) => {
     if (turn !== game.moves.length)
@@ -118,8 +112,6 @@ function GamePageContent() {
   const handleQuit = () => {
     router.push('/')
   }
-
-  const visibleRules = RULE_MODALS.filter((modal) => modal.category === activeCategory)
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(255,215,145,0.12),_transparent_28%),linear-gradient(180deg,_#18110c_0%,_#0c0907_100%)] px-4 py-6 text-stone-100 sm:px-6 lg:px-8">

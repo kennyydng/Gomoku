@@ -7,14 +7,14 @@ type Stone = null | Player
 export type Position = [number,number]
 export type GameResult = null | 0 | 1 | 'draw'
 type Threat = {
-  type: 'C3' | 'O3' | 'C4' | '4+4' | 'O4' | '5' | 'overline'
+  type: 'O3' | 'C4' | '4+4' | 'O4' | '5' | 'overline'
   dir: Direction
   line: Position[]
 }
 type Direction = [-1|0|1, -1|0|1]
 
 type SectionThreat = {
-  type?: 'C3' | 'O3' | 'C4' | '4+4' | 'O4' | '5' | 'overline'
+  type?: 'O3' | 'C4' | '4+4' | 'O4' | '5' | 'overline'
   line?: [number, number]
   flanked?: boolean
   requires?: number[]
@@ -32,7 +32,6 @@ export type Rules = {
   threeThree: boolean | 'black'
   fourFour: boolean | 'black'
   flanking: boolean | 'black'
-  swap2: boolean
   grid: '15x15' | '19x19'
 }
 
@@ -187,11 +186,7 @@ export class Gomoku {
         return null
     }
 
-    return {
-      move,
-      captures,
-      threats //: threats.filter(({type}) => type !== 'overline')
-    }
+    return { move, captures, threats }
   }
 
   applyResolvedMove(
@@ -220,11 +215,10 @@ export class Gomoku {
     if (this.rules.capture) {
       if (this.score[opponent] >= 10 && this.score[player] >= 10)
         return 'draw'
-      if (this.score[opponent] >= 10) // Can happen with self-captures
+      if (this.score[opponent] >= 10) // possible via auto-capture
         return opponent
 
       if (this.delayedWin) {
-        console.log(this.moves)
         const opponent5Lines = this.getThreats(this.moves.at(-1)!, 5).filter(({type}) => type === '5')
 
         if (opponent5Lines.length) {
@@ -382,7 +376,6 @@ export class Gomoku {
       threeThree: asPlayerRule(this.rules.threeThree),
       fourFour: asPlayerRule(this.rules.fourFour),
       flanking: asPlayerRule(this.rules.flanking),
-      swap2: this.rules.swap2,
       grid: this.rules.grid,
     }
   }
@@ -536,13 +529,6 @@ class Section extends Array<Stone> {
           ]
           return {type: 'O3', line: line3, requires: plays.filter((_,i) => isO4(i))}
         }
-
-        // Disabled because requires returning both O3 + C3 threats at once
-        //const is4 = (i) => (ext[i].type === 'C4' || ext[i].type === '4+4')
-        //if (is4(0) || is4(1)) {
-        //  const line = line.map((pos,i) => is4(i) ? ext[i].line[i] : pos)
-        //  return {type: 'C3', line, requires: plays.filter((_,i) => is4(i))}
-        //}
       }
     }
 

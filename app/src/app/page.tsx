@@ -33,11 +33,25 @@ export default function Home() {
     fourFour: false,
     flanking: false,
     pass: true,
-    swap2: false,
     grid: '15x15',
   })
 
   const presets = [
+    {
+      key: 'standard',
+      label: 'Standard',
+      rules: {
+        capture: true,
+        captureUnperfect: true,
+        foulOverline: false,
+        overline: true,
+        threeThree: true,
+        fourFour: false,
+        flanking: false,
+        pass: true,
+        grid: '19x19',
+      } as Rules,
+    },
     {
       key: 'freestyle',
       label: 'Freestyle',
@@ -50,7 +64,6 @@ export default function Home() {
         fourFour: false,
         flanking: false,
         pass: true,
-        swap2: false,
         grid: '15x15',
       } as Rules,
     },
@@ -66,40 +79,7 @@ export default function Home() {
         fourFour: 'black',
         flanking: false,
         pass: true,
-        swap2: false,
         grid: '15x15',
-      } as Rules,
-    },
-    {
-      key: 'caro',
-      label: 'Caro',
-      rules: {
-        capture: false,
-        captureUnperfect: false,
-        foulOverline: false,
-        overline: true,
-        threeThree: false,
-        fourFour: false,
-        flanking: true,
-        pass: true,
-        swap2: false,
-        grid: '19x19',
-      } as Rules,
-    },
-    {
-      key: 'omok',
-      label: 'Omok',
-      rules: {
-        capture: false,
-        captureUnperfect: false,
-        foulOverline: false,
-        overline: true,
-        threeThree: true,
-        fourFour: false,
-        flanking: false,
-        pass: true,
-        swap2: false,
-        grid: '19x19',
       } as Rules,
     },
     {
@@ -114,7 +94,6 @@ export default function Home() {
         fourFour: false,
         flanking: false,
         pass: true,
-        swap2: false,
         grid: '15x15',
       } as Rules,
     },
@@ -130,7 +109,6 @@ export default function Home() {
         fourFour: false,
         flanking: false,
         pass: true,
-        swap2: false,
         grid: '19x19',
       } as Rules,
     },
@@ -145,7 +123,6 @@ export default function Home() {
     threeThree: 'Double free-three',
     fourFour: 'Double free-four',
     flanking: 'Flanking',
-    swap2: 'Swap2',
     grid: 'Grid size',
   }
 
@@ -158,7 +135,6 @@ export default function Home() {
     threeThree: 'Interdit les coups qui créent deux menaces de “trois libres” en même temps.',
     fourFour: 'Interdit les coups qui créent deux menaces de “quatre” en même temps.',
     flanking: 'Refuse une ligne de 5 si elle est complètement encadrée par les pierres adverses.',
-    swap2: 'Active la règle Swap2 pour équilibrer les débuts de partie après les premiers coups.',
     grid: 'Choisit la taille du plateau: 15x15 pour des parties plus rapides, 19x19 pour un jeu plus ouvert.',
   }
 

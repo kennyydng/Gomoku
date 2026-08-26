@@ -126,10 +126,9 @@ inline int runLenOf(Pos start, Pos end, Pos dir)
 inline Pos stepPos(Pos p, Pos dir, int n)
 	{ return p + dir * int8_t(n); };
 
-// Zobrist hashing: one random 64-bit key per (position, color), plus one
-// for side-to-move, XORed in/out as stones are placed/removed so Gomoku
-// can maintain a running position hash for the search's transposition
-// table. Fixed seed: reproducible runs, no need for real randomness.
+// Hachage de Zobrist : une clé 64 bits par (case, couleur) + une pour le
+// trait, XORées à chaque coup pour maintenir un hash de position incrémental
+// (table de transposition). Seed fixe : runs reproductibles.
 inline uint64_t zobristKey(Pos pos, bool player) {
 	static uint64_t table[2][SIZE * SIZE];
 	static bool initialized = false;
@@ -229,19 +228,11 @@ public:
 	Stone stone( Pos pos ) const
 		{ return {stones[0][pos], stones[1][pos]}; };
 
-	template<class F>
-	auto with_move( Pos move, F &&f )
-	-> decltype(auto) {
-			play(move);
-			f(*this);
-			undo();
-		}
-
 	void play(Pos move);
 	void undo();
 
-	// Rules engine: threats, move legality and win/draw detection.
-	// Contract: threatAt/getThreats assume `pos` already holds `player`'s stone.
+	// Menaces, légalité, victoire/nulle. threatAt/getThreats supposent que
+	// `pos` contient déjà la pierre de `player`.
 	void rawPlace(Pos pos, bool player)
 		{ stones[player] += pos; };
 	void rawRemove(Pos pos, bool player)

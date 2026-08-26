@@ -4,26 +4,27 @@
 #include <chrono>
 #include <vector>
 
-// --- Move generation ---------------------------------------------------
+// --- Génération de coups -----------------------------------------------
 //
-// Candidates are restricted to empty cells within CANDIDATE_RADIUS of an
-// existing stone (keeps the branching factor bounded on a mostly-empty
-// 19x19/15x15 board), filtered for legality (isLegalMove, the only
-// recursive/expensive check), and ranked by a cheap non-recursive pattern
-// score: the shape the move creates for its own side (offense) plus the
-// shape it denies the opponent (defense/blocking).
+// Candidats limités aux cases vides à CANDIDATE_RADIUS d'une pierre existante
+// (borne le facteur de branchement sur un plateau surtout vide), filtrés par
+// légalité (isLegalMove, seul contrôle récursif/coûteux), triés par un score
+// de motif non récursif : ce que le coup crée pour soi + ce qu'il bloque
+// chez l'adversaire.
 
 static constexpr int CANDIDATE_RADIUS = 1;
-static constexpr size_t MAX_BRANCH = 8;
+// Réduit de 8 à 6 : les branches en plus changeaient peu la qualité des
+// coups mais faisaient exploser le temps sur les positions ouvertes/calmes
+// (voir MIN_DEPTH plus bas, qui impose la profondeur 10).
+static constexpr size_t MAX_BRANCH = 6;
 static constexpr double BLOCK_FACTOR = 0.8;
 
-// Bounding box (inflated by CANDIDATE_RADIUS) around every stone that has
-// ever been on the board during this search. Only ever grows: cheap to
-// maintain, and search moves that fall outside it are still adjacent to a
-// real stone by construction, so it never hides a legitimate candidate.
-// Restricting the board scan to it turns generateCandidates() from an
-// O(boardSize^2) scan into an O(boxArea) one, which matters since it runs
-// at every node.
+// Boîte englobante (élargie de CANDIDATE_RADIUS) de toutes les pierres
+// jouées depuis le début de la recherche. Ne fait que grandir : pas cher à
+// maintenir, et un coup hors de la boîte est par construction trop loin de
+// toute pierre pour être un candidat valable. Restreindre le scan à cette
+// boîte transforme generateCandidates() d'un O(taille²) en O(aire boîte),
+// ce qui compte vu que ça tourne à chaque nœud.
 struct Box { int8_t minX, maxX, minY, maxY; };
 static Box searchBox;
 
@@ -35,13 +36,13 @@ static void expandBox(Pos p) {
 	searchBox.maxY = std::min(hi, (int8_t)std::max<int>(searchBox.maxY, p.y + CANDIDATE_RADIUS));
 }
 
-// --- Pattern scoring ---------------------------------------------------
+// --- Score de motif ------------------------------------------------------
 //
-// Classifies a run of stones by length + how many of its two ends are open,
-// via a direct (non-recursive) walk with runStart/runEnd. Used both as the
-// leaf heuristic (evaluate(), full board) and, much more often, as a cheap
-// per-candidate move-ordering score (single line through one cell): no
-// recursion, unlike the legality-only threat detection in isLegalMove().
+// Classe un alignement par sa longueur + son nombre d'extrémités ouvertes,
+// via une marche directe (non récursive) avec runStart/runEnd. Sert à
+// l'heuristique de feuille (evaluate(), plateau entier) et, bien plus
+// souvent, au tri des coups candidats (une seule ligne par case) : pas de
+// récursion, contrairement à la détection de menace dans isLegalMove().
 
 static constexpr int W_FIVE       = 100000;
 static constexpr int W_OPEN_FOUR  = 15000;
@@ -64,9 +65,9 @@ static int patternWeight(int len, int openEnds) {
 	return 0;
 }
 
-// Score of the single stone at `pos` (already placed) for `player`, summed
-// over its 4 lines. O(1)-ish: each line walk is bounded by the (short) run
-// length, no recursion.
+// Score de la pierre en `pos` (déjà posée) pour `player`, sommé sur ses 4
+// lignes. Quasi O(1) : chaque marche est bornée par la longueur (courte) de
+// l'alignement, sans récursion.
 static int localPatternScore(Gomoku &state, Pos pos, bool player) {
 	int total = 0;
 	for (const Pos &dir : DIRECTIONS) {
@@ -82,17 +83,14 @@ static int localPatternScore(Gomoku &state, Pos pos, bool player) {
 	return total;
 }
 
-// `checkLegality` gates the one recursive/expensive check here
-// (isLegalMove, for double-three/four-four/foul-overline). It is only
-// affordable at a handful of calls per game turn, not at every one of the
-// (possibly hundreds of thousands of) internal search nodes needed to reach
-// the required 10-ply depth within the time budget. So: full legality is
-// always enforced at the root (the move the bot actually plays must be
-// 100% legal), while deeper hypothetical nodes explore the geometrically
-// plausible candidates without re-deriving that check — win/draw detection
-// (applyMove) is unaffected and always exact, only the rare "this exact
-// hypothetical stone would itself be a forbidden double-three" case is
-// approximated away deep in the tree.
+// `checkLegality` active le seul contrôle récursif/coûteux (isLegalMove,
+// pour double-trois/double-quatre/foul-overline). Impossible à se payer à
+// chaque nœud (potentiellement des centaines de milliers pour atteindre la
+// profondeur 10) : la légalité complète n'est garantie qu'à la racine (le
+// coup réellement joué est donc toujours 100% légal), les nœuds internes
+// explorent les candidats géométriquement plausibles sans la revérifier —
+// seule la détection de victoire/nulle (applyMove), toujours exacte, coupe
+// l'arbre en profondeur.
 static std::vector<Pos> generateCandidates(Gomoku &state, bool checkLegality) {
 	if (state.turn() == 0) {
 		int8_t center = (int8_t)current_board_size() / 2;
@@ -109,16 +107,14 @@ static std::vector<Pos> generateCandidates(Gomoku &state, bool checkLegality) {
 		if (!state.stone(pos).empty())
 			continue;
 
+		// CANDIDATE_RADIUS vaut 1, donc les 8 sous-directions couvrent
+		// exactement le voisinage recherché.
 		bool hasNeighbor = false;
-		for (int8_t dy = -CANDIDATE_RADIUS; dy <= CANDIDATE_RADIUS && !hasNeighbor; dy++) {
-			for (int8_t dx = -CANDIDATE_RADIUS; dx <= CANDIDATE_RADIUS; dx++) {
-				if (dx == 0 && dy == 0)
-					continue;
-				Pos near = pos + Pos{dx,dy};
-				if (near.valid() && !state.stone(near).empty()) {
-					hasNeighbor = true;
-					break;
-				}
+		for (const Pos &d : SUBDIRECTIONS) {
+			Pos near = pos + d;
+			if (near.valid() && !state.stone(near).empty()) {
+				hasNeighbor = true;
+				break;
 			}
 		}
 		if (!hasNeighbor)
@@ -148,11 +144,11 @@ static std::vector<Pos> generateCandidates(Gomoku &state, bool checkLegality) {
 	return moves;
 }
 
-// --- Heuristic --------------------------------------------------------------
+// --- Heuristique -----------------------------------------------------------
 
-// Scans every run of stones once (only counted from its start cell) and
-// scores it by length + how many of its two ends are open. Cheap enough to
-// run at every leaf: O(board size) per call, no recursion.
+// Parcourt chaque alignement une fois (compté depuis sa case de départ) et
+// le note par longueur + extrémités ouvertes. Assez rapide pour tourner à
+// chaque feuille : O(taille du plateau), sans récursion.
 static int evaluate(Gomoku &state) {
 	int score[2] = {0, 0};
 
@@ -165,7 +161,7 @@ static int evaluate(Gomoku &state) {
 		for (const Pos &dir : DIRECTIONS) {
 			Pos prev = pos - dir;
 			if (prev.valid() && state.stone(prev) == s)
-				continue; // not the start of this run
+				continue; // pas le début de l'alignement
 
 			Pos end = state.runEnd(pos, dir, player);
 			int len = runLenOf(pos, end, dir);
@@ -173,7 +169,6 @@ static int evaluate(Gomoku &state) {
 			Pos after = end + dir;
 			bool openBefore = before.valid() && state.stone(before).empty();
 			bool openAfter = after.valid() && state.stone(after).empty();
-
 			score[player] += patternWeight(len, (openBefore ? 1 : 0) + (openAfter ? 1 : 0));
 		}
 	});
@@ -185,7 +180,7 @@ static int evaluate(Gomoku &state) {
 	return score[toMove] - score[!toMove];
 }
 
-// --- Search: negamax with alpha-beta pruning + iterative deepening ---------
+// --- Recherche : négamax + élagage alpha-bêta + iterative deepening -------
 
 static constexpr int MATE_SCORE = 1'000'000;
 static constexpr int INF_SCORE  = 2'000'000;
@@ -200,12 +195,10 @@ static void checkTime() {
 		throw SearchAborted{};
 }
 
-// Transposition table: caches the result of a position keyed by its Zobrist
-// hash, so that when the same board is reached again through a different
-// move order (common with alpha-beta, since move ordering is only a
-// heuristic) the subtree is not re-explored from scratch. Fixed-size,
-// always-replace — simple, and the dominant win (avoiding duplicate work)
-// doesn't need a fancier replacement policy at this scale.
+// Table de transposition : cache le résultat d'une position par son hash de
+// Zobrist, pour éviter de ré-explorer un sous-arbre déjà vu via un autre
+// ordre de coups. Taille fixe, remplacement systématique — suffisant à
+// cette échelle, l'essentiel du gain vient d'éviter le travail dupliqué.
 enum class TTFlag : uint8_t { Exact, Lower, Upper };
 
 struct TTEntry {
@@ -315,6 +308,13 @@ static std::pair<Pos,int> rootSearch(Gomoku &state, int depth) {
 
 static constexpr int MAX_DEPTH = 14;
 static constexpr auto TIME_BUDGET = std::chrono::milliseconds(460);
+// Le sujet exige *toujours* au moins 10 plis, pas "en moyenne". Les
+// profondeurs jusqu'à MIN_DEPTH ont un plafond large au lieu du budget
+// normal, pour qu'une position dense n'écourte jamais la recherche avant le
+// palier 10 ; au-delà, le vrai budget de 460ms s'applique. HARD_BUDGET est
+// un filet de sécurité contre une position pathologique, pas un objectif.
+static constexpr int MIN_DEPTH = 10;
+static constexpr auto HARD_BUDGET = std::chrono::milliseconds(1500);
 
 int main() {
 	std::string rules;
@@ -344,7 +344,10 @@ int main() {
 	int depthReached = 0;
 
 	if (!rootMoves.empty()) {
-		for (int depth = 1; depth <= MAX_DEPTH && std::chrono::steady_clock::now() < deadline; depth++) {
+		for (int depth = 1; depth <= MAX_DEPTH; depth++) {
+			deadline = start + (depth <= MIN_DEPTH ? HARD_BUDGET : TIME_BUDGET);
+			if (depth > MIN_DEPTH && std::chrono::steady_clock::now() >= deadline)
+				break;
 			try {
 				auto [move, score] = rootSearch(state, depth);
 				bestMove = move;

@@ -67,7 +67,6 @@ function GomokuBoard({ mode, rules, onUpdate, onBotResponseTime }: GomokuBoardPr
   const handleHumanMove = (pos: Position) => {
     if (isLocked) return
     const move = game.resolveMove(pos)
-    console.log(move)
     if (move) {
       setHistory([...history, game])
       const next = new Gomoku(game)
