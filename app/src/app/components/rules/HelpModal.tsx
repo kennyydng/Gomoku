@@ -119,13 +119,19 @@ export const RULE_MODALS: RuleModal[] = [
   {
     title: 'Overline',
     category: 'Forbidden',
-    text: 'An overline is a line longer than 5 stones. Depending on the rule settings, it can be illegal for Black or for both players.',
+    text: 'An overline is a line longer than 5 stones. When the overline rule is enabled, it counts as a win just like a regular five. When disabled, a line longer than 5 does not win by itself.',
+    showBoard: false,
+  },
+  {
+    title: 'Foul overline',
+    category: 'Forbidden',
+    text: 'A separate rule from overline: when enabled, forming a line longer than 5 is an illegal move instead of a win, no matter what the overline rule says.',
     showBoard: false,
   },
   {
     title: 'Double-four',
     category: 'Forbidden',
-    text: 'A double-four is a move that creates two separate four-threats at the same time. When fourFour is enabled, this move is forbidden.',
+    text: 'A double-four is a move that creates two separate four-threats at the same time. When fourFour is enabled, this move is forbidden for Black (Renju-style — there is no "both players" setting for this rule).',
     showBoard: false,
   },
   {

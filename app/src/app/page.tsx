@@ -83,6 +83,21 @@ export default function Home() {
       } as Rules,
     },
     {
+      key: 'caro',
+      label: 'Caro',
+      rules: {
+        capture: false,
+        captureUnperfect: false,
+        foulOverline: false,
+        overline: true,
+        threeThree: false,
+        fourFour: false,
+        flanking: true,
+        pass: true,
+        grid: '19x19',
+      } as Rules,
+    },
+    {
       key: 'ninuki-renju',
       label: 'Ninuki-renju',
       rules: {
@@ -133,7 +148,7 @@ export default function Home() {
     foulOverline: 'Interdit le sur-ligne pour certaines configurations, surtout côté noir selon la règle choisie.',
     overline: 'Une ligne de plus de 5 pierres peut compter comme une victoire, ou être réservée au noir selon le mode.',
     threeThree: 'Interdit les coups qui créent deux menaces de “trois libres” en même temps.',
-    fourFour: 'Interdit les coups qui créent deux menaces de “quatre” en même temps.',
+    fourFour: 'Interdit les coups qui créent deux menaces de “quatre” en même temps (toujours réservé au noir, comme au Renju).',
     flanking: 'Refuse une ligne de 5 si elle est complètement encadrée par les pierres adverses.',
     grid: 'Choisit la taille du plateau: 15x15 pour des parties plus rapides, 19x19 pour un jeu plus ouvert.',
   }
@@ -274,7 +289,7 @@ export default function Home() {
                       className="text-xs bg-stone-900 border border-stone-700 rounded px-2 py-1 text-stone-200"
                     >
                       <option value="false">Disabled</option>
-                      <option value="true">Enabled</option>
+                      {ruleKey !== 'fourFour' ? <option value="true">Enabled</option> : null}
                       <option value="black">Black only</option>
                     </select>
                   ) : (

@@ -48,7 +48,7 @@ function GamePageContent() {
         parsed[key] = true
     }
 
-    const readPlayerRule = (key: 'overline' | 'threeThree' | 'fourFour' | 'flanking') => {
+    const readPlayerRule = (key: 'overline' | 'threeThree' | 'flanking') => {
       const param = searchParams?.get(key)
       if (param === 'b')
         parsed[key] = 'black'
@@ -65,8 +65,14 @@ function GamePageContent() {
 
     readPlayerRule('overline')
     readPlayerRule('threeThree')
-    readPlayerRule('fourFour')
     readPlayerRule('flanking')
+
+    // fourFour n'a pas d'état "activé pour les deux joueurs" (voir Rules.fourFour)
+    const fourFourParam = searchParams?.get('fourFour')
+    if (fourFourParam === 'b')
+      parsed.fourFour = 'black'
+    if (fourFourParam === '0')
+      parsed.fourFour = false
 
     const gridParam = searchParams?.get('grid')
     if (gridParam === '15x15' || gridParam === '19x19')

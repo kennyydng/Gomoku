@@ -30,9 +30,18 @@ export type Rules = {
   foulOverline: boolean
   overline: boolean | 'black'
   threeThree: boolean | 'black'
-  fourFour: boolean | 'black'
+  fourFour: false | 'black'
   flanking: boolean | 'black'
   grid: '15x15' | '19x19'
+}
+
+// Version de Rules avec les règles "black only" déjà résolues en booléen
+// simple pour un joueur donné (voir rulesFor).
+type ResolvedRules = Omit<Rules, 'overline' | 'threeThree' | 'fourFour' | 'flanking'> & {
+  overline: boolean
+  threeThree: boolean
+  fourFour: boolean
+  flanking: boolean
 }
 
 const SUBDIRECTIONS: Array<Direction> = [
@@ -365,7 +374,7 @@ export class Gomoku {
     return DIRECTIONS.map((dir) => this.getSection(pos, dir))
   }
 
-  rulesFor(player: Player): Rules {
+  rulesFor(player: Player): ResolvedRules {
     const asPlayerRule = (value: boolean | 'black') => (value === 'black' ? player === 0 : value)
     return {
       pass: this.rules.pass,
@@ -470,7 +479,7 @@ class Section extends Array<Stone> {
     return [start,end]
   }
 
-  threatOf(move: number, rules: Rules, player: Player, min: number = 3): SectionThreat {
+  threatOf(move: number, rules: ResolvedRules, player: Player, min: number = 3): SectionThreat {
     if ( this.length < 5 || move < 0 || move >= this.length || this[move] !== null )
       return {}
     const captures = this.play(move, player, rules.capture)
@@ -480,7 +489,7 @@ class Section extends Array<Stone> {
   }
 
 
-  threatAt(move: number, rules: Rules, player: Player, min: number = 3): SectionThreat {
+  threatAt(move: number, rules: ResolvedRules, player: Player, min: number = 3): SectionThreat {
     if ( this.length < 5 )
       return {}
 

@@ -19,7 +19,8 @@ inline uint8_t &current_board_size() {
 
 struct Rules {
 	uint8_t boardSize;
-	bool pass;
+	bool pass; // parsé pour garder l'alignement du protocole, jamais lu ici :
+	           // le frontend résout pass/nulle avant d'appeler le bot.
 
 	bool capture;
 	bool captureUnperfect;
