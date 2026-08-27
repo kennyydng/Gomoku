@@ -13,10 +13,12 @@
 // chez l'adversaire.
 
 static constexpr int CANDIDATE_RADIUS = 1;
-// Réduit de 8 à 6 : les branches en plus changeaient peu la qualité des
-// coups mais faisaient exploser le temps sur les positions ouvertes/calmes
-// (voir MIN_DEPTH plus bas, qui impose la profondeur 10).
-static constexpr size_t MAX_BRANCH = 6;
+// Réduit de 8 à 6 puis à 5 : les branches en plus changeaient peu la
+// qualité des coups mais faisaient exploser le temps en milieu de partie
+// (voir MIN_DEPTH plus bas, qui impose la profondeur 10 quel que soit le
+// temps que ça prend — réduire le branchement est le seul levier pour
+// respecter aussi le budget moyen sans risquer de rater cette profondeur).
+static constexpr size_t MAX_BRANCH = 5;
 static constexpr double BLOCK_FACTOR = 0.8;
 
 // Boîte englobante (élargie de CANDIDATE_RADIUS) de toutes les pierres
@@ -129,6 +131,18 @@ static std::vector<Pos> generateCandidates(Gomoku &state, bool checkLegality) {
 		state.rawPlace(pos, !player);
 		int oppScore = localPatternScore(state, pos, !player);
 		state.rawRemove(pos, !player);
+
+		// Score de motif seul : un coup de capture isolé (ne prolonge/bloque
+		// aucune ligne) note 0 et se fait éliminer par MAX_BRANCH dès que 6
+		// coups "normaux" existent sur le plateau — invisible à toute la
+		// recherche. wouldCapture couvre l'attaque (je capture) et la
+		// défense (l'adversaire capturerait s'il jouait ici).
+		if (state.captureRule()) {
+			if (state.wouldCapture(pos, player))
+				ownScore += W_CAPTURE;
+			if (state.wouldCapture(pos, !player))
+				oppScore += W_CAPTURE;
+		}
 
 		scored.push_back({ownScore + (int)(BLOCK_FACTOR * oppScore), pos});
 	}
@@ -278,6 +292,10 @@ static int negamax(Gomoku &state, int depth, int alpha, int beta) {
 	return best;
 }
 
+// Rempli par rootSearch à chaque profondeur : (coup, score) de la racine,
+// pour un aperçu du raisonnement de l'IA (soutenance / debug) sur stderr.
+static std::vector<std::pair<Pos,int>> rootScores;
+
 static std::pair<Pos,int> rootSearch(Gomoku &state, int depth) {
 	std::vector<Pos> moves = generateCandidates(state, true);
 
@@ -285,6 +303,11 @@ static std::pair<Pos,int> rootSearch(Gomoku &state, int depth) {
 	int alpha = -INF_SCORE;
 	const int beta = INF_SCORE;
 
+	// Accumulé localement : n'écrase rootScores (dernière profondeur
+	// complète) qu'une fois la boucle finie, pour ne pas perdre les
+	// données d'une profondeur déjà aboutie si celle-ci est interrompue
+	// par checkTime() en cours de route.
+	std::vector<std::pair<Pos,int>> scores;
 	for (Pos m : moves) {
 		checkTime();
 		expandBox(m);
@@ -298,11 +321,13 @@ static std::pair<Pos,int> rootSearch(Gomoku &state, int depth) {
 			v = -negamax(state, depth - 1, -beta, -alpha);
 		state.undo();
 
+		scores.push_back({m, v});
 		if (v > alpha) {
 			alpha = v;
 			bestMove = m;
 		}
 	}
+	rootScores = std::move(scores);
 	return {bestMove, alpha};
 }
 
@@ -362,8 +387,17 @@ int main() {
 
 	std::cerr << "Depth reached: " << depthReached
 		<< " | Nodes: " << nodeCount
-		<< " | Time: " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count() << "ms"
+		<< " | Search time: " << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count() << "ms"
 		<< std::endl;
+
+	// Affiché en 1-indexé pour matcher les coordonnées montrées à l'écran
+	// par l'UI (aria-label "Intersection x+1, y+1"), contrairement au
+	// protocole stdin/stdout qui reste en 0-indexé.
+	std::sort(rootScores.begin(), rootScores.end(), [](auto &a, auto &b){ return a.second > b.second; });
+	std::cerr << "Candidates (move: score):";
+	for (size_t i = 0; i < rootScores.size(); i++)
+		std::cerr << " " << (int)rootScores[i].first.x + 1 << ":" << (int)rootScores[i].first.y + 1 << ":" << rootScores[i].second;
+	std::cerr << " -> chosen " << (int)bestMove.x + 1 << ":" << (int)bestMove.y + 1 << std::endl;
 
 	if (bestMove.valid())
 		std::cout << "|" << bestMove;

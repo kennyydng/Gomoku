@@ -1,21 +1,35 @@
 
 #include "Gomoku.class.hpp"
 #include <cassert>
+#include <iomanip>
 #include <iostream>
 
+// Numéros de ligne/colonne en 1-indexé (comme affiché à l'écran par l'UI),
+// pour repérer visuellement une case citée dans les logs de debug (ex:
+// "Candidates ... 8:11").
 std::ostream &operator<<(std::ostream &o, Gomoku const &gomoku) {
 	o << gomoku.turn() << " " <<
 		Stone(Stone::WHITE) << gomoku.score(0) << "-" <<
 		Stone(Stone::BLACK) << gomoku.score(1) << "\n";
+
+	const int8_t size = (int8_t)current_board_size();
+
+	o << "   ";
+	for (int8_t x = 0; x < size; x++)
+		o << std::setw(2) << (int)(x + 1);
+	o << "\n";
+
 	Gomoku::forall([&](Pos &&pos){
-		o << gomoku.stone(pos) << (pos.x == (int8_t)current_board_size() - 1 ? "\n" : "─");
+		if (pos.x == 0)
+			o << std::setw(2) << (int)(pos.y + 1) << " ";
+		o << gomoku.stone(pos) << (pos.x == size - 1 ? "\n" : " ");
 	});
 	return o;
 }
 
 void Gomoku::play(Pos move) {
 	const bool player = this->player();
-	uint16_t cap_mask = 0b111'1'1'111; // les 8 bits hauts restent libres
+	uint16_t cap_mask = rules.capture ? 0b111'1'1'111 : 0; // les 8 bits hauts restent libres
 	const int8_t max_capture_anchor = (int8_t)rules.boardSize - 4;
 
 	assert(move.valid() && stone(move).empty());

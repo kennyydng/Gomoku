@@ -75,7 +75,7 @@ export async function POST(request: Request) {
   const x = Number(best[1])
   const y = Number(best[2])
 
-  console.log(`Move: ${x},${y} | time: ${time / 1000}`);
+  console.log(`Move: ${x + 1}:${y + 1} | Total time (spawn + search + IO): ${time}ms`);
 
   return NextResponse.json({
     move: [x, y] as Position,

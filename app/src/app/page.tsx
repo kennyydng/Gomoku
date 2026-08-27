@@ -25,21 +25,21 @@ function RuleInfo({ label, description }: { label: string; description: string }
 export default function Home() {
   const [selectedMode, setSelectedMode] = useState<'local' | 'ai' | 'training'>('local')
   const [rules, setRules] = useState<Rules>({
-    capture: false,
-    captureUnperfect: false,
+    capture: true,
+    captureUnperfect: true,
     foulOverline: false,
     overline: true,
-    threeThree: false,
+    threeThree: true,
     fourFour: false,
     flanking: false,
     pass: true,
-    grid: '15x15',
+    grid: '19x19',
   })
 
   const presets = [
     {
-      key: 'standard',
-      label: 'Standard',
+      key: '42-mandatory',
+      label: '42 Mandatory',
       rules: {
         capture: true,
         captureUnperfect: true,

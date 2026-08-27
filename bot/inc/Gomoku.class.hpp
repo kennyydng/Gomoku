@@ -217,6 +217,8 @@ public:
 		{ return turn() % 2; };
 	unsigned score(unsigned player) const
 		{ return captures[player]; };
+	bool captureRule() const
+		{ return rules.capture; };
 	uint64_t zobrist() const
 		{ return hash; };
 
