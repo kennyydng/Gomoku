@@ -19,23 +19,23 @@ inline uint8_t &current_board_size() {
 
 struct Rules {
 	uint8_t boardSize;
-	bool pass; // parsé pour garder l'alignement du protocole, jamais lu ici :
-	           // le frontend résout pass/nulle avant d'appeler le bot.
 
 	bool capture;
 	bool captureUnperfect;
 
 	struct {
-		bool foulOverline;
-		bool overline;
+		// Fusion de deux anciens booléens séparés (overline/foulOverline)
+		// toujours interprétés ensemble pour un même joueur — voir
+		// Rules::overline côté frontend (Gomoku.ts) pour la justification.
+		bool overlineWins;
+		bool overlineForbidden;
 
 		bool threeThree;
 		bool fourFour;
-		bool flanking;
 	} players[2];
 
 	Rules(std::string str) {
-			if (str.size() != 9)
+			if (str.size() != 6)
 				throw std::runtime_error("Invalid rules");
 
 			if (str[0] == '5')
@@ -46,14 +46,23 @@ struct Rules {
 				throw std::runtime_error("Invalid grid size");
 			current_board_size() = boardSize;
 
-			pass                    	 = (str[1] == '1');
-			capture                 	 = (str[2] == '1');
-			captureUnperfect        	 = (str[3] == '1');
-			players[0].foulOverline 	 = (str[4] == '1'); players[1].foulOverline 	 = (str[4] ==  '1' || str[4] ==  'b');
-			players[0].overline     	 = (str[5] == '1'); players[1].overline     	 = (str[5] ==  '1' || str[5] ==  'b');
-			players[0].threeThree   	 = (str[6] == '1'); players[1].threeThree   	 = (str[6] ==  '1' || str[6] ==  'b');
-			players[0].fourFour     	 = (str[7] == '1'); players[1].fourFour     	 = (str[7] ==  '1' || str[7] ==  'b');
-			players[0].flanking     	 = (str[8] == '1'); players[1].flanking     	 = (str[8] ==  '1' || str[8] ==  'b');
+			capture          = (str[1] == '1');
+			captureUnperfect = (str[2] == '1');
+
+			// Overline à 4 états, un seul caractère : '1' victoire (les deux),
+			// '0' légal mais ne gagne pas (les deux), 'f' interdit (les deux),
+			// 'b' interdit pour noir seulement / victoire pour blanc (Renju).
+			const char overline = str[3];
+			players[0].overlineWins      = (overline == '1');
+			players[0].overlineForbidden = (overline == 'f' || overline == 'b');
+			players[1].overlineWins      = (overline == '1' || overline == 'b');
+			players[1].overlineForbidden = (overline == 'f');
+
+			// 'b' (black only) s'applique à players[0] (noir), jamais à
+			// players[1] (blanc) — même convention que ruleAppliesToPlayer()
+			// côté frontend.
+			players[0].threeThree = (str[4] == '1' || str[4] == 'b'); players[1].threeThree = (str[4] == '1');
+			players[0].fourFour   = (str[5] == '1' || str[5] == 'b'); players[1].fourFour   = (str[5] == '1');
 		}
 };
 

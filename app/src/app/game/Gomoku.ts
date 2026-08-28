@@ -16,32 +16,47 @@ type Direction = [-1|0|1, -1|0|1]
 type SectionThreat = {
   type?: 'O3' | 'C4' | '4+4' | 'O4' | '5' | 'overline'
   line?: [number, number]
-  flanked?: boolean
   requires?: number[]
 }
 
 type Board = Stone[][]
 type Captures = [number, number]
 
+// Overline (ligne de 6+) et foulOverline (interdiction de la jouer) étaient
+// deux booléens séparés mais toujours interprétés ensemble pour un même
+// joueur — fusionnés en un seul champ à 4 états, qui ne peut plus décrire de
+// combinaison incohérente (ex: gagnante ET illégale à la fois) :
+// - 'win'            : une ligne de 6+ gagne, pour les deux joueurs (défaut du sujet)
+// - 'legal'           : une ligne de 6+ est jouable mais ne gagne pas, pour les deux joueurs
+// - 'forbidden'       : une ligne de 6+ est un coup illégal, pour les deux joueurs
+// - 'forbiddenBlack'  : illégale pour noir, gagnante pour blanc (Renju)
+export type OverlineRule = 'win' | 'legal' | 'forbidden' | 'forbiddenBlack'
+
 export type Rules = {
-  pass: boolean
   capture: boolean
   captureUnperfect: boolean
-  foulOverline: boolean
-  overline: boolean | 'black'
+  overline: OverlineRule
   threeThree: boolean | 'black'
   fourFour: false | 'black'
-  flanking: boolean | 'black'
   grid: '15x15' | '19x19'
+}
+
+function resolveOverline(rule: OverlineRule, player: Player) {
+  if (rule === 'forbiddenBlack')
+    return player === 0 ? {wins: false, forbidden: true} : {wins: true, forbidden: false}
+  return {
+    wins: rule === 'win',
+    forbidden: rule === 'forbidden',
+  }
 }
 
 // Version de Rules avec les règles "black only" déjà résolues en booléen
 // simple pour un joueur donné (voir rulesFor).
-type ResolvedRules = Omit<Rules, 'overline' | 'threeThree' | 'fourFour' | 'flanking'> & {
-  overline: boolean
+type ResolvedRules = Omit<Rules, 'overline' | 'threeThree' | 'fourFour'> & {
+  overlineWins: boolean
+  overlineForbidden: boolean
   threeThree: boolean
   fourFour: boolean
-  flanking: boolean
 }
 
 const SUBDIRECTIONS: Array<Direction> = [
@@ -179,15 +194,17 @@ export class Gomoku {
       captures = this.findCaptures(move)
 
     const threats = this.getMoveThreats(move)
+    const overline = threats.filter(({type}) => type === 'overline')
+    const overlineRule = resolveOverline(this.rules.overline, this.player)
     const winning = threats.filter(({type}) => type === '5')
-    const overlineApplies = threats.some(({type}) => type === 'overline') && ruleAppliesToPlayer(this.rules.overline, this.player)
+      .concat(overline.length && overlineRule.wins ? overline : [])
 
     if (!captures.length && !winning.length) {
       const four = threats.filter(({type}) => type === 'O4' || type === 'C4')
       const fourFour = threats.filter(({type}) => type === '4+4')
       const three = threats.filter(({type}) => type === 'O3')
 
-      if (this.rules.foulOverline && overlineApplies)
+      if (overline.length && overlineRule.forbidden)
         return null
       if (ruleAppliesToPlayer(this.rules.fourFour, this.player) && (four.length > 1 || fourFour.length))
          return null
@@ -219,7 +236,9 @@ export class Gomoku {
     const opponent = opponentOf(player)
     const playerThreats = this.getThreats(move, 5)
     const player5Lines = playerThreats.filter(({type}) => type === '5')
-    const playerOverlines = playerThreats.filter(({type}) => type === 'overline')
+    const playerOverlines = playerThreats
+      .filter(({type}) => type === 'overline')
+      .filter(() => resolveOverline(this.rules.overline, player).wins)
 
     if (this.rules.capture) {
       if (this.score[opponent] >= 10 && this.score[player] >= 10)
@@ -259,32 +278,10 @@ export class Gomoku {
     if (this.hasAnyLegalMove())
       return null
 
-    if (this.rules.pass) {
-        this.player = player
-        if (this.hasAnyLegalMove())
-          return null
-    }
-
-    return 'draw'
-  }
-
-  passTurn() {
-    if (!this.rules.pass || this.result !== null)
-      return null
-
-    const player = this.player
-    const opponent = opponentOf(player)
-
-    this.player = opponent
-    if (this.hasAnyLegalMove())
-      return null
-
-    if (this.rules.pass) {
-      this.player = player
-      if (this.hasAnyLegalMove())
-        return null
-    }
-
+    // Plus aucun coup légal nulle part pour l'adversaire : cas quasi
+    // jamais atteint en pratique (il faudrait un plateau presque plein
+    // sans qu'aucun five ne se soit jamais formé). Match nul direct,
+    // pas de mécanisme de "pass".
     return 'draw'
   }
 
@@ -376,15 +373,14 @@ export class Gomoku {
 
   rulesFor(player: Player): ResolvedRules {
     const asPlayerRule = (value: boolean | 'black') => (value === 'black' ? player === 0 : value)
+    const overline = resolveOverline(this.rules.overline, player)
     return {
-      pass: this.rules.pass,
       capture: this.rules.capture,
       captureUnperfect: this.rules.captureUnperfect,
-      foulOverline: this.rules.foulOverline,
-      overline: asPlayerRule(this.rules.overline),
+      overlineWins: overline.wins,
+      overlineForbidden: overline.forbidden,
       threeThree: asPlayerRule(this.rules.threeThree),
       fourFour: asPlayerRule(this.rules.fourFour),
-      flanking: asPlayerRule(this.rules.flanking),
       grid: this.rules.grid,
     }
   }
@@ -493,26 +489,22 @@ class Section extends Array<Stone> {
     if ( this.length < 5 )
       return {}
 
-    const opponent = opponentOf(player)
     const line = this.getContiguous(move, player)
     const len = line[1] - line[0]
-    const appliesToPlayer = (rule: boolean | 'black') => ruleAppliesToPlayer(rule, player)
-    const flanked = [
-      appliesToPlayer(rules.flanking) && line[0] > 0      && this[line[0]-1] === opponent,
-      appliesToPlayer(rules.flanking) && line[1] < this.length && this[line[1]  ] === opponent,
-    ]
 
-    if (len > 5 && appliesToPlayer(rules.overline))
+    // 'overline' n'est ici qu'un constat géométrique (ligne de 6+) : c'est
+    // au niveau de resolveMove/updateTurn, pas ici, que les règles overline
+    // (victoire ?) et foulOverline (coup illégal ?) décident chacune
+    // indépendamment quoi en faire pour ce joueur.
+    if (len > 5)
       return {type: 'overline', line}
-    else if (len >= 5) {
-      if (len > 5 || !flanked[0] || !flanked[1])
-        return {type: '5', line, flanked: len === 5 && (flanked[0] || flanked[1])}
+    else if (len === 5) {
+      return {type: '5', line}
     } else if (min < 5) {
       const plays = [line[0]-1,line[1]]
       const ext = plays.map((play) => this.threatOf(play, rules, player, min+1))
 
       const is5 = (i: number) => (ext[i].type === '5')
-      const isFlanked = (i: number) => (ext[i].flanked)
       const linePointOr = (i: number, index: number, fallback: number) => {
         const maybeLine = ext[i].line
         if (!maybeLine)
@@ -525,7 +517,7 @@ class Section extends Array<Stone> {
           is5(0) ? linePointOr(0, 0, line[0]) : line[0],
           is5(1) ? linePointOr(1, 1, line[1]) : line[1],
         ]
-        if (is5(0) && !isFlanked(0) && is5(1) && !isFlanked(1))
+        if (is5(0) && is5(1))
           return {type: len === 4 ? 'O4' : '4+4', line: line4}
         else
           return {type: 'C4', line}

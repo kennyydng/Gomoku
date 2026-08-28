@@ -28,24 +28,24 @@ export async function POST(request: Request) {
     throw new Error("Invalid move list!")
 
   const gridToken = rules.grid === '15x15' ? '5' : '9'
-  const orderedRuleKeys: Array<keyof Rules> = [
-    'pass',
-    'capture',
-    'captureUnperfect',
-    'foulOverline',
-    'overline',
-    'threeThree',
-    'fourFour',
-    'flanking',
-  ]
-  const rulesPayload = orderedRuleKeys
-    .map((key) => {
-      const value = rules[key]
-      if (value === 'black')
-        return 'b'
-      return value ? '1' : '0'
-    })
-    .join('')
+  const overlineToken: Record<Rules['overline'], string> = {
+    win: '1',
+    legal: '0',
+    forbidden: 'f',
+    forbiddenBlack: 'b',
+  }
+  const rulesPayload =
+    (rules.capture ? '1' : '0') +
+    (rules.captureUnperfect ? '1' : '0') +
+    overlineToken[rules.overline] +
+    (['threeThree', 'fourFour'] as const)
+      .map((key) => {
+        const value = rules[key]
+        if (value === 'black')
+          return 'b'
+        return value ? '1' : '0'
+      })
+      .join('')
 
   const state = `${gridToken}${rulesPayload}\n${moves.map(([x,y]) => `|${x}:${y}`).join('')}`;
 

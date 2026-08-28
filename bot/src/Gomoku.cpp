@@ -126,20 +126,16 @@ Threat Gomoku::threatAt(Pos pos, Pos dir, bool player, int min) {
 	const Pos end = runEnd(pos, dir, player);
 	const int len = runLenOf(start, end, dir);
 
-	const bool overlineApplies = rules.players[player].overline;
-	const bool flankingApplies = rules.players[player].flanking;
 	const Pos beforeStart = start - dir;
 	const Pos afterEnd = end + dir;
-	const bool flank0 = flankingApplies && beforeStart.valid() && stones[!player][beforeStart];
-	const bool flank1 = flankingApplies && afterEnd.valid() && stones[!player][afterEnd];
 
-	if (len > 5 && overlineApplies)
+	// 'overline' n'est ici qu'un constat géométrique (ligne de 6+) : c'est
+	// à isLegalMove/applyMove, pas ici, de décider indépendamment si ça
+	// gagne (overlineWins) et/ou si c'est un coup interdit (overlineForbidden).
+	if (len > 5)
 		return {ThreatType::Overline, start, end, dir};
-	if (len >= 5) {
-		if (len > 5 || !flank0 || !flank1)
-			return {ThreatType::Five, start, end, dir};
-		return {};
-	}
+	if (len == 5)
+		return {ThreatType::Five, start, end, dir};
 	if (min >= 5)
 		return {};
 
@@ -230,7 +226,7 @@ bool Gomoku::isLegalMove(Pos pos, bool player) {
 		return false;
 
 	const auto &playerRules = rules.players[player];
-	if (!playerRules.threeThree && !playerRules.fourFour && !playerRules.foulOverline)
+	if (!playerRules.threeThree && !playerRules.fourFour && !playerRules.overlineForbidden)
 		return true;
 
 	rawPlace(pos, player);
@@ -238,15 +234,17 @@ bool Gomoku::isLegalMove(Pos pos, bool player) {
 	rawRemove(pos, player);
 
 	bool winning = false;
-	for (const Threat &t : threats)
+	for (const Threat &t : threats) {
 		if (t.type == ThreatType::Five) { winning = true; break; }
+		if (t.type == ThreatType::Overline && playerRules.overlineWins) { winning = true; break; }
+	}
 
 	// Un coup qui capture ou gagne échappe aux règles de forme interdite
 	// (même logique que resolveMove() côté frontend).
 	if (winning || (rules.capture && wouldCapture(pos, player)))
 		return true;
 
-	if (playerRules.foulOverline) {
+	if (playerRules.overlineForbidden) {
 		for (const Threat &t : threats)
 			if (t.type == ThreatType::Overline)
 				return false;
@@ -318,7 +316,7 @@ Outcome Gomoku::applyMove(Pos pos) {
 		Pos fStart{}, fEnd{}, fDir{};
 
 		for (const Threat &t : threats) {
-			if (t.type == ThreatType::Overline) {
+			if (t.type == ThreatType::Overline && rules.players[mover].overlineWins) {
 				outcome = {Result::Win, mover};
 				break;
 			}

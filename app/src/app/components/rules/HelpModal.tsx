@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { BOARD_THEME, STONE_THEME } from '../../constants/game'
+import type { Rules } from '../../game/Gomoku'
 
 const HELP_BOARD_SIZE = 7
 
@@ -29,118 +30,135 @@ export type RuleModal = {
   afterLabel?: string
 }
 
-export const RULE_MODALS: RuleModal[] = [
-  {
-    title: 'Victory',
-    category: 'General',
-    text: '• Align 5 or more stones of your color continuously to win.\n• If an alignment can be immediately broken by capture, it does not count as a win.\n• Capturing 10 opponent stones also wins the game.',
-    showBoard: false,
-  },
-  {
-    title: 'Pass move',
-    category: 'General',
-    text: 'When pass is enabled, a player with no legal move can pass their turn instead of being forced into a draw. In the current setup, pass is on.',
-    showBoard: false,
-  },
-  {
-    title: 'Capture RuleModals',
-    category: 'Capture',
-    text: 'You capture a pair of opponent stones by flanking them on both sides with your stones. The two captured stones are removed from the board, freeing the intersections.',
-    showBoard: true,
-    beforeBoard: createHelpBoard([
-      { row: 3, col: 1, player: 1 },
-      { row: 3, col: 2, player: 2 },
-      { row: 3, col: 3, player: 2 },
-      { row: 3, col: 4, player: 3 },
-    ]),
-    afterBoard: createHelpBoard([
-      { row: 3, col: 1, player: 1 },
-      { row: 3, col: 4, player: 1 },
-    ]),
-  },
-  {
-    title: 'Capture win',
-    category: 'Capture',
-    text: 'Capturing 10 opponent stones wins the game immediately.',
-    showBoard: false,
-  },
-  {
-    title: 'Unperfect five',
-    category: 'Capture',
-    text: 'With captureUnperfect enabled, a line of 5 that can be immediately broken by capture is not always an instant win. The win may be delayed until the position is safe.',
-    showBoard: false,
-  },
-  {
-    title: 'What is a free-three?',
-    category: 'Free-three',
-    text: 'A free-three is an alignement of three stones that, if not immediately blocked, allows for an indefendable alignment of four stones (that’s to say an alignment of four stones with two unobstructed extremities). Both are free-threes:',
-    showBoard: true,
-    beforeLabel: 'Case 1',
-    beforeBoard: createHelpBoard([
-      { row: 3, col: 2, player: 1 },
-      { row: 3, col: 3, player: 1 },
-      { row: 3, col: 4, player: 1 },
-    ]),
-    afterLabel: 'Case 2',
-    afterBoard: createHelpBoard([
-      { row: 3, col: 2, player: 1 },
-      { row: 3, col: 4, player: 1 },
-      { row: 3, col: 5, player: 1 },
-    ]),
-  },
-  {
-    title: 'Forbidden Moves',
-    category: 'Forbidden',
-    text: "A double-three is a move that introduces two simultaneous free-three alignments. But the move in a would be legal:\n• Case 1: If it captures a pair of opponent stones\n• Case 2: If one of the free-threes would be obstructed",
-    showBoard: true,
-    beforeLabel: 'Case 1',
-    beforeBoard: createHelpBoard([
-      { row: 2, col: 3, player: 1 },
-      
-      { row: 3, col: 0, player: 1 },
-      { row: 3, col: 1, player: 2 },
-      { row: 3, col: 2, player: 2 },
-      { row: 3, col: 3, player: 3 },
-      { row: 3, col: 4, player: 1 },
-      { row: 3, col: 5, player: 1 },
+// Généré à partir des règles réellement choisies pour la partie en cours :
+// une entrée n'a de sens que si le mécanisme qu'elle décrit est actif, donc
+// on filtre plutôt que d'afficher un résumé générique qui ne correspondrait
+// pas à la partie affichée.
+const OVERLINE_VICTORY_BULLET: Record<Rules['overline'], string> = {
+  win: '• Align 5 or more stones of your color continuously to win.',
+  legal: '• Align exactly 5 stones of your color continuously to win — a longer line is legal to play but does not count as a win.',
+  forbidden: '• Align exactly 5 stones of your color continuously to win — forming a longer line is an illegal move.',
+  forbiddenBlack: '• Align 5 or more stones to win — except Black, for whom forming a line longer than 5 is an illegal move.',
+}
 
-      { row: 4, col: 3, player: 1 },
-    ]),
-    afterLabel: 'Case 2',
-    afterBoard: createHelpBoard([
-        { row: 1, col: 1, player: 1 },
-        { row: 2, col: 2, player: 1 },
-        { row: 4, col: 4, player: 5 },
-        { row: 4, col: 3, player: 4 },
-        { row: 4, col: 5, player: 1 },
-        { row: 4, col: 6, player: 1 },
-    ]),
-  },
-  {
-    title: 'Overline',
-    category: 'Forbidden',
-    text: 'An overline is a line longer than 5 stones. When the overline rule is enabled, it counts as a win just like a regular five. When disabled, a line longer than 5 does not win by itself.',
-    showBoard: false,
-  },
-  {
-    title: 'Foul overline',
-    category: 'Forbidden',
-    text: 'A separate rule from overline: when enabled, forming a line longer than 5 is an illegal move instead of a win, no matter what the overline rule says.',
-    showBoard: false,
-  },
-  {
-    title: 'Double-four',
-    category: 'Forbidden',
-    text: 'A double-four is a move that creates two separate four-threats at the same time. When fourFour is enabled, this move is forbidden for Black (Renju-style — there is no "both players" setting for this rule).',
-    showBoard: false,
-  },
-  {
-    title: 'Flanking',
-    category: 'Forbidden',
-    text: 'When flanking is enabled, a five can be rejected if it is completely flanked by opponent stones. That prevents a surrounded five from counting as an immediate win.',
-    showBoard: false,
-  },
-]
+export function getRuleModals(rules: Rules): RuleModal[] {
+  const victoryBullets = [
+    OVERLINE_VICTORY_BULLET[rules.overline],
+    ...(rules.capture && rules.captureUnperfect
+      ? ['• If an alignment can be immediately broken by capture, it does not count as a win.']
+      : []),
+    ...(rules.capture ? ['• Capturing 10 opponent stones also wins the game.'] : []),
+  ]
+
+  return [
+    {
+      title: 'Victory',
+      category: 'General',
+      text: victoryBullets.join('\n'),
+      showBoard: false,
+    },
+    {
+      title: 'Draw',
+      category: 'General',
+      text: 'If a player has no legal move left anywhere on the board, the game ends in a draw.',
+      showBoard: false,
+    },
+    ...(rules.capture ? [
+      {
+        title: 'Capture RuleModals',
+        category: 'Capture' as const,
+        text: 'You capture a pair of opponent stones by flanking them on both sides with your stones. The two captured stones are removed from the board, freeing the intersections.',
+        showBoard: true,
+        beforeBoard: createHelpBoard([
+          { row: 3, col: 1, player: 1 },
+          { row: 3, col: 2, player: 2 },
+          { row: 3, col: 3, player: 2 },
+          { row: 3, col: 4, player: 3 },
+        ]),
+        afterBoard: createHelpBoard([
+          { row: 3, col: 1, player: 1 },
+          { row: 3, col: 4, player: 1 },
+        ]),
+      },
+      {
+        title: 'Capture win',
+        category: 'Capture' as const,
+        text: 'Capturing 10 opponent stones wins the game immediately.',
+        showBoard: false,
+      },
+    ] : []),
+    ...(rules.capture && rules.captureUnperfect ? [{
+      title: 'Unperfect five',
+      category: 'Capture' as const,
+      text: 'A line of 5 that can be immediately broken by capture is not always an instant win. The win may be delayed until the position is safe.',
+      showBoard: false,
+    }] : []),
+    ...(rules.threeThree ? [
+      {
+        title: 'What is a free-three?',
+        category: 'Free-three' as const,
+        text: 'A free-three is an alignement of three stones that, if not immediately blocked, allows for an indefendable alignment of four stones (that’s to say an alignment of four stones with two unobstructed extremities). Both are free-threes:',
+        showBoard: true,
+        beforeLabel: 'Case 1',
+        beforeBoard: createHelpBoard([
+          { row: 3, col: 2, player: 1 },
+          { row: 3, col: 3, player: 1 },
+          { row: 3, col: 4, player: 1 },
+        ]),
+        afterLabel: 'Case 2',
+        afterBoard: createHelpBoard([
+          { row: 3, col: 2, player: 1 },
+          { row: 3, col: 4, player: 1 },
+          { row: 3, col: 5, player: 1 },
+        ]),
+      },
+      {
+        title: 'Forbidden Moves',
+        category: 'Forbidden' as const,
+        text: "A double-three is a move that introduces two simultaneous free-three alignments. But the move in a would be legal:\n• Case 1: If it captures a pair of opponent stones\n• Case 2: If one of the free-threes would be obstructed",
+        showBoard: true,
+        beforeLabel: 'Case 1',
+        beforeBoard: createHelpBoard([
+          { row: 2, col: 3, player: 1 },
+
+          { row: 3, col: 0, player: 1 },
+          { row: 3, col: 1, player: 2 },
+          { row: 3, col: 2, player: 2 },
+          { row: 3, col: 3, player: 3 },
+          { row: 3, col: 4, player: 1 },
+          { row: 3, col: 5, player: 1 },
+
+          { row: 4, col: 3, player: 1 },
+        ]),
+        afterLabel: 'Case 2',
+        afterBoard: createHelpBoard([
+            { row: 1, col: 1, player: 1 },
+            { row: 2, col: 2, player: 1 },
+            { row: 4, col: 4, player: 5 },
+            { row: 4, col: 3, player: 4 },
+            { row: 4, col: 5, player: 1 },
+            { row: 4, col: 6, player: 1 },
+        ]),
+      },
+    ] : []),
+    ...(rules.overline !== 'win' ? [{
+      title: 'Overline',
+      category: 'Forbidden' as const,
+      text: 'An overline is a line longer than 5 stones. ' + {
+        legal: 'It is legal to play but does not count as a win — you still need an exact 5 elsewhere.',
+        forbidden: 'Forming one is an illegal move.',
+        forbiddenBlack: 'Forming one is an illegal move for Black — White still wins with it, like a regular five.',
+      }[rules.overline as 'legal' | 'forbidden' | 'forbiddenBlack'],
+      showBoard: false,
+    }] : []),
+    ...(rules.fourFour ? [{
+      title: 'Double-four',
+      category: 'Forbidden' as const,
+      text: 'A double-four is a move that creates two separate four-threats at the same time. This move is forbidden for Black (Renju-style — there is no "both players" setting for this rule).',
+      showBoard: false,
+    }] : []),
+  ]
+}
 
 
 function HelpMiniBoard({ board }: { board: number[][] }) {

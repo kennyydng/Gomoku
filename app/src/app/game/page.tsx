@@ -6,7 +6,7 @@ import GomokuBoard from '../components/gomoku/GomokuBoard'
 import { Gomoku } from './Gomoku'
 import { getCaptureOrbClass, getTurnOrbClass } from '../constants/game'
 import { GAME_PAGE_THEME } from '../constants/ui'
-import HelpModal, { RULE_MODALS } from '../components/rules/HelpModal'
+import HelpModal, { getRuleModals } from '../components/rules/HelpModal'
 
 import type { Player, Rules } from './Gomoku'
 
@@ -28,19 +28,16 @@ function GamePageContent() {
   const defaultRules: Rules = {
     capture: true,
     captureUnperfect: true,
-    foulOverline: false,
-    overline: false,
+    overline: 'win',
     threeThree: true,
     fourFour: false,
-    flanking: false,
-    pass: true,
     grid: "19x19"
   }
-  
+
   const parseRulesFromParams = () => {
     const parsed: Rules = { ...defaultRules }
 
-    const readBoolean = (key: Exclude<keyof Rules, 'overline' | 'threeThree' | 'fourFour' | 'flanking' | 'grid'>) => {
+    const readBoolean = (key: Exclude<keyof Rules, 'overline' | 'threeThree' | 'fourFour' | 'grid'>) => {
       const param = searchParams?.get(key)
       if (param === '0')
         parsed[key] = false
@@ -48,7 +45,7 @@ function GamePageContent() {
         parsed[key] = true
     }
 
-    const readPlayerRule = (key: 'overline' | 'threeThree' | 'flanking') => {
+    const readPlayerRule = (key: 'threeThree') => {
       const param = searchParams?.get(key)
       if (param === 'b')
         parsed[key] = 'black'
@@ -58,14 +55,14 @@ function GamePageContent() {
         parsed[key] = true
     }
 
-    readBoolean('pass')
     readBoolean('capture')
     readBoolean('captureUnperfect')
-    readBoolean('foulOverline')
 
-    readPlayerRule('overline')
+    const overlineParam = searchParams?.get('overline')
+    if (overlineParam === 'win' || overlineParam === 'legal' || overlineParam === 'forbidden' || overlineParam === 'forbiddenBlack')
+      parsed.overline = overlineParam
+
     readPlayerRule('threeThree')
-    readPlayerRule('flanking')
 
     // fourFour n'a pas d'état "activé pour les deux joueurs" (voir Rules.fourFour)
     const fourFourParam = searchParams?.get('fourFour')
@@ -200,7 +197,7 @@ function GamePageContent() {
           </section>
         </div>
 
-        <HelpModal show={showRules} onClose={() => setShowRules(false)} rules={RULE_MODALS} />
+        <HelpModal show={showRules} onClose={() => setShowRules(false)} rules={getRuleModals(rules)} />
       </div>
     </main>
   )

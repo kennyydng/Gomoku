@@ -8,7 +8,7 @@ l'affichage/l'aide côté humain). L'API `app/src/app/api/bot/route.ts` compile
 le binaire `bot/gomoku` puis lui envoie l'état de la partie sur `stdin` :
 
 ```
-<règles sur 9 caractères>\n
+<règles sur 6 caractères>\n
 |x0:y0|x1:y1|x2:y2...
 ```
 
@@ -64,6 +64,22 @@ densité du plateau, dans le budget de temps imposé.
 `route.ts` ne recompile `bot/gomoku` que si les sources ont changé (comparaison
 de timestamps) — recompiler du C++ à chaque coup coûtait bien plus cher que la
 recherche elle-même, et faussait le temps de réponse réel perçu par le joueur.
+
+## Bonus (au-delà du mandatory)
+
+- **Liste de règles à toggle individuellement** (`app/src/app/page.tsx`) :
+  chaque règle du sujet (capture, capture d'une ligne de 5, overline à 4
+  états, double-trois, double-quatre) est activable/désactivable
+  indépendamment, plutôt qu'un seul jeu de règles fixe.
+- **Presets de variantes connues** : 42 Mandatory, Classic, Renju,
+  Ninuki-renju, Pente — le bonus "starting conditions" suggéré par le sujet,
+  étendu à des jeux de règles complets plutôt qu'aux seules variantes
+  Standard/Pro/Swap.
+- **Taille de plateau au choix** : 15x15 ou 19x19, plutôt que fixée à 19x19.
+- **Undo** (`GomokuBoard.tsx`) : revenir en arrière pour explorer des
+  variantes, en mode local et training.
+- **Menu d'aide** (`HelpModal.tsx`) : explication des règles en cours de
+  partie, directement dans l'UI.
 
 ## Commandes Docker
 

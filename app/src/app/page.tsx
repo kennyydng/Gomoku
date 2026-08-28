@@ -27,12 +27,9 @@ export default function Home() {
   const [rules, setRules] = useState<Rules>({
     capture: true,
     captureUnperfect: true,
-    foulOverline: false,
-    overline: true,
+    overline: 'win',
     threeThree: true,
     fourFour: false,
-    flanking: false,
-    pass: true,
     grid: '19x19',
   })
 
@@ -43,27 +40,21 @@ export default function Home() {
       rules: {
         capture: true,
         captureUnperfect: true,
-        foulOverline: false,
-        overline: true,
+        overline: 'win',
         threeThree: true,
         fourFour: false,
-        flanking: false,
-        pass: true,
         grid: '19x19',
       } as Rules,
     },
     {
-      key: 'freestyle',
-      label: 'Freestyle',
+      key: 'classic',
+      label: 'Classic',
       rules: {
         capture: false,
         captureUnperfect: false,
-        foulOverline: false,
-        overline: true,
+        overline: 'win',
         threeThree: false,
         fourFour: false,
-        flanking: false,
-        pass: true,
         grid: '15x15',
       } as Rules,
     },
@@ -73,43 +64,26 @@ export default function Home() {
       rules: {
         capture: false,
         captureUnperfect: false,
-        foulOverline: true,
-        overline: 'black',
+        overline: 'forbiddenBlack',
         threeThree: 'black',
         fourFour: 'black',
-        flanking: false,
-        pass: true,
         grid: '15x15',
-      } as Rules,
-    },
-    {
-      key: 'caro',
-      label: 'Caro',
-      rules: {
-        capture: false,
-        captureUnperfect: false,
-        foulOverline: false,
-        overline: true,
-        threeThree: false,
-        fourFour: false,
-        flanking: true,
-        pass: true,
-        grid: '19x19',
       } as Rules,
     },
     {
       key: 'ninuki-renju',
       label: 'Ninuki-renju',
       rules: {
+        // Double-trois interdit à noir (comme Renju), mais double-quatre
+        // autorisé (contrairement à Renju — la capture change l'équilibre)
+        // et overline qui ne gagne pour PERSONNE (contrairement à Renju où
+        // blanc gagne avec).
         capture: true,
         captureUnperfect: true,
-        foulOverline: false,
-        overline: true,
-        threeThree: true,
+        overline: 'legal',
+        threeThree: 'black',
         fourFour: false,
-        flanking: false,
-        pass: true,
-        grid: '15x15',
+        grid: '19x19',
       } as Rules,
     },
     {
@@ -118,42 +92,42 @@ export default function Home() {
       rules: {
         capture: true,
         captureUnperfect: false,
-        foulOverline: false,
-        overline: false,
+        overline: 'win',
         threeThree: false,
         fourFour: false,
-        flanking: false,
-        pass: true,
         grid: '19x19',
       } as Rules,
     },
   ] as const
 
   const ruleLabels: Record<keyof Rules, string> = {
-    pass: 'Pass',
     capture: 'Capture',
     captureUnperfect: 'Capture a line of 5',
-    foulOverline: 'Foul overline',
     overline: 'Overline',
     threeThree: 'Double free-three',
     fourFour: 'Double free-four',
-    flanking: 'Flanking',
     grid: 'Grid size',
   }
 
   const ruleDescriptions: Record<keyof Rules, string> = {
-    pass: 'Autorise un joueur à passer son tour si aucune autre action utile n’est possible.',
     capture: 'Active la prise de deux pierres adverses quand elles sont encadrées par vos pierres.',
     captureUnperfect: 'Empêche parfois qu’une ligne de 5 soit validée si elle peut être immédiatement cassée par une capture.',
-    foulOverline: 'Interdit le sur-ligne pour certaines configurations, surtout côté noir selon la règle choisie.',
-    overline: 'Une ligne de plus de 5 pierres peut compter comme une victoire, ou être réservée au noir selon le mode.',
+    overline: 'Décide ce qui se passe pour une ligne de 6 pierres ou plus : victoire, coup légal mais non gagnant, ou coup interdit (pour les deux joueurs ou pour noir seulement, comme au Renju).',
     threeThree: 'Interdit les coups qui créent deux menaces de “trois libres” en même temps.',
     fourFour: 'Interdit les coups qui créent deux menaces de “quatre” en même temps (toujours réservé au noir, comme au Renju).',
-    flanking: 'Refuse une ligne de 5 si elle est complètement encadrée par les pierres adverses.',
     grid: 'Choisit la taille du plateau: 15x15 pour des parties plus rapides, 19x19 pour un jeu plus ouvert.',
   }
 
-  const blackRules: Array<keyof Rules> = ['overline', 'threeThree', 'fourFour', 'flanking']
+  const blackRules: Array<keyof Rules> = ['threeThree', 'fourFour']
+
+  // Cocher la case interdit-elle un coup, ou active-t-elle un mécanisme de jeu ?
+  // Le nom seul ne le dit pas, d'où un label "No X" explicite pour les règles qui interdisent un coup
+  // (ex: "No double free-three" coché = interdit de jouer ce coup).
+  const ruleBadges: Partial<Record<keyof Rules, string>> = {
+    captureUnperfect: 'No win on breakable five',
+    threeThree: 'No double free-three',
+    fourFour: 'No double free-four',
+  }
 
   const applyPreset = (presetRules: Rules) => {
     setRules(presetRules)
@@ -162,7 +136,7 @@ export default function Home() {
   const getRulesQueryString = () => {
     return Object.entries(rules)
       .map(([key, value]) => {
-        if (key === 'grid') {
+        if (key === 'grid' || key === 'overline') {
           return `${key}=${value}`
         }
         if (typeof value === 'string') {
@@ -262,7 +236,7 @@ export default function Home() {
               return (
                 <div key={key} className="flex items-center justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2">
-                    <span className="text-sm text-stone-200">{label}</span>
+                    <span className="text-sm text-stone-200">{ruleBadges[ruleKey] ?? label}</span>
                     <RuleInfo label={label} description={description} />
                   </div>
                   {ruleKey === 'grid' ? (
@@ -275,6 +249,19 @@ export default function Home() {
                     >
                       <option value="15x15">15x15</option>
                       <option value="19x19">19x19</option>
+                    </select>
+                  ) : ruleKey === 'overline' ? (
+                    <select
+                      value={value as Rules['overline']}
+                      onChange={(e) =>
+                        setRules(prev => ({ ...prev, overline: e.target.value as Rules['overline'] }))
+                      }
+                      className="text-xs bg-stone-900 border border-stone-700 rounded px-2 py-1 text-stone-200"
+                    >
+                      <option value="win">Win</option>
+                      <option value="legal">Legal, no win</option>
+                      <option value="forbidden">Forbidden</option>
+                      <option value="forbiddenBlack">Forbidden (black only)</option>
                     </select>
                   ) : isBlackRule ? (
                     <select
