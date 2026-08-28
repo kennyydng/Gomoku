@@ -4,13 +4,14 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { MENU_CARD_THEME } from './constants/ui'
 import type { Rules } from './game/Gomoku'
+import HelpModal, { getRuleModals } from './components/rules/HelpModal'
 
 function RuleInfo({ label, description }: { label: string; description: string }) {
   return (
     <span className="relative inline-flex shrink-0 items-center group">
       <button
         type="button"
-        aria-label={`Aide pour ${label}`}
+        aria-label={`Help for ${label}`}
         className="flex h-5 w-5 items-center justify-center rounded-full border border-amber-400/30 bg-amber-300/10 text-[10px] font-bold text-amber-100 transition hover:border-amber-300/60 hover:bg-amber-300/20 focus:outline-none focus:ring-2 focus:ring-amber-300/40"
       >
         i
@@ -24,6 +25,7 @@ function RuleInfo({ label, description }: { label: string; description: string }
 
 export default function Home() {
   const [selectedMode, setSelectedMode] = useState<'local' | 'ai' | 'training'>('local')
+  const [showRules, setShowRules] = useState(false)
   const [rules, setRules] = useState<Rules>({
     capture: true,
     captureUnperfect: true,
@@ -110,12 +112,12 @@ export default function Home() {
   }
 
   const ruleDescriptions: Record<keyof Rules, string> = {
-    capture: 'Active la prise de deux pierres adverses quand elles sont encadrées par vos pierres.',
-    captureUnperfect: 'Empêche parfois qu’une ligne de 5 soit validée si elle peut être immédiatement cassée par une capture.',
-    overline: 'Décide ce qui se passe pour une ligne de 6 pierres ou plus : victoire, coup légal mais non gagnant, ou coup interdit (pour les deux joueurs ou pour noir seulement, comme au Renju).',
-    threeThree: 'Interdit les coups qui créent deux menaces de “trois libres” en même temps.',
-    fourFour: 'Interdit les coups qui créent deux menaces de “quatre” en même temps (toujours réservé au noir, comme au Renju).',
-    grid: 'Choisit la taille du plateau: 15x15 pour des parties plus rapides, 19x19 pour un jeu plus ouvert.',
+    capture: 'Enables capturing a pair of opponent stones when they are flanked by your own stones.',
+    captureUnperfect: 'Sometimes prevents a line of 5 from winning outright if it can be immediately broken by a capture.',
+    overline: 'Decides what happens for a line of 6+ stones: win, legal move but no win, or illegal move (for both players, or for Black only, like in Renju).',
+    threeThree: 'Forbids moves that create two "free-three" threats at the same time.',
+    fourFour: 'Forbids moves that create two "four" threats at the same time (always Black-only, like in Renju).',
+    grid: 'Chooses the board size: 15x15 for faster games, 19x19 for a more open game.',
   }
 
   const blackRules: Array<keyof Rules> = ['threeThree', 'fourFour']
@@ -212,7 +214,16 @@ export default function Home() {
         </section>
 
         <section className="w-full max-w-2xl space-y-4">
-          <h2 className="text-lg font-semibold text-amber-100">Customize Game Rules</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-amber-100">Customize Game Rules</h2>
+            <button
+              type="button"
+              onClick={() => setShowRules(true)}
+              className="rounded-full border border-amber-400/20 bg-amber-300/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.24em] text-amber-100 transition hover:border-amber-400/40 hover:bg-amber-300/15"
+            >
+              Rules help
+            </button>
+          </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {presets.map((preset) => (
               <button
@@ -296,6 +307,8 @@ export default function Home() {
         </section>
 
       </div>
+
+      <HelpModal show={showRules} onClose={() => setShowRules(false)} rules={getRuleModals(rules)} />
     </main>
   )
 }

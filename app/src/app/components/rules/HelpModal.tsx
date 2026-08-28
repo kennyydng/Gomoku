@@ -21,7 +21,7 @@ export function createHelpBoard(stones: Array<{ row: number; col: number; player
 
 export type RuleModal = {
   title: string
-  category: 'Capture' | 'Forbidden' | 'Free-three' | 'General'
+  category: 'Capture' | 'Free-three' | 'Double-four' | 'Overline' | 'General'
   text: string
   showBoard?: boolean
   beforeBoard?: number[][]
@@ -63,98 +63,123 @@ export function getRuleModals(rules: Rules): RuleModal[] {
       text: 'If a player has no legal move left anywhere on the board, the game ends in a draw.',
       showBoard: false,
     },
-    ...(rules.capture ? [
-      {
-        title: 'Capture RuleModals',
-        category: 'Capture' as const,
-        text: 'You capture a pair of opponent stones by flanking them on both sides with your stones. The two captured stones are removed from the board, freeing the intersections.',
-        showBoard: true,
-        beforeBoard: createHelpBoard([
-          { row: 3, col: 1, player: 1 },
-          { row: 3, col: 2, player: 2 },
-          { row: 3, col: 3, player: 2 },
-          { row: 3, col: 4, player: 3 },
-        ]),
-        afterBoard: createHelpBoard([
-          { row: 3, col: 1, player: 1 },
-          { row: 3, col: 4, player: 1 },
-        ]),
-      },
-      {
-        title: 'Capture win',
-        category: 'Capture' as const,
-        text: 'Capturing 10 opponent stones wins the game immediately.',
-        showBoard: false,
-      },
-    ] : []),
-    ...(rules.capture && rules.captureUnperfect ? [{
-      title: 'Unperfect five',
+    ...(rules.capture ? [{
+      title: 'Capture RuleModals',
       category: 'Capture' as const,
-      text: 'A line of 5 that can be immediately broken by capture is not always an instant win. The win may be delayed until the position is safe.',
+      text: 'You capture a pair of opponent stones by flanking them on both sides with your stones. The two captured stones are removed from the board, freeing the intersections.',
+      showBoard: true,
+      beforeBoard: createHelpBoard([
+        { row: 3, col: 1, player: 1 },
+        { row: 3, col: 2, player: 2 },
+        { row: 3, col: 3, player: 2 },
+        { row: 3, col: 4, player: 3 },
+      ]),
+      afterBoard: createHelpBoard([
+        { row: 3, col: 1, player: 1 },
+        { row: 3, col: 4, player: 1 },
+      ]),
+    }] : []),
+    ...(rules.capture && rules.captureUnperfect ? [{
+      title: 'Breakable five',
+      category: 'Capture' as const,
+      text: 'If the five you just formed still has a pair your opponent could capture, it does not resolve immediately: your opponent gets exactly one move to break it by capturing. If they don\'t (or can\'t), the five stands.',
       showBoard: false,
     }] : []),
-    ...(rules.threeThree ? [
-      {
-        title: 'What is a free-three?',
-        category: 'Free-three' as const,
-        text: 'A free-three is an alignement of three stones that, if not immediately blocked, allows for an indefendable alignment of four stones (that’s to say an alignment of four stones with two unobstructed extremities). Both are free-threes:',
-        showBoard: true,
-        beforeLabel: 'Case 1',
-        beforeBoard: createHelpBoard([
-          { row: 3, col: 2, player: 1 },
-          { row: 3, col: 3, player: 1 },
-          { row: 3, col: 4, player: 1 },
-        ]),
-        afterLabel: 'Case 2',
-        afterBoard: createHelpBoard([
-          { row: 3, col: 2, player: 1 },
-          { row: 3, col: 4, player: 1 },
-          { row: 3, col: 5, player: 1 },
-        ]),
-      },
-      {
-        title: 'Forbidden Moves',
-        category: 'Forbidden' as const,
-        text: "A double-three is a move that introduces two simultaneous free-three alignments. But the move in a would be legal:\n• Case 1: If it captures a pair of opponent stones\n• Case 2: If one of the free-threes would be obstructed",
-        showBoard: true,
-        beforeLabel: 'Case 1',
-        beforeBoard: createHelpBoard([
-          { row: 2, col: 3, player: 1 },
-
-          { row: 3, col: 0, player: 1 },
-          { row: 3, col: 1, player: 2 },
-          { row: 3, col: 2, player: 2 },
-          { row: 3, col: 3, player: 3 },
-          { row: 3, col: 4, player: 1 },
-          { row: 3, col: 5, player: 1 },
-
-          { row: 4, col: 3, player: 1 },
-        ]),
-        afterLabel: 'Case 2',
-        afterBoard: createHelpBoard([
-            { row: 1, col: 1, player: 1 },
-            { row: 2, col: 2, player: 1 },
-            { row: 4, col: 4, player: 5 },
-            { row: 4, col: 3, player: 4 },
-            { row: 4, col: 5, player: 1 },
-            { row: 4, col: 6, player: 1 },
-        ]),
-      },
-    ] : []),
-    ...(rules.overline !== 'win' ? [{
-      title: 'Overline',
-      category: 'Forbidden' as const,
-      text: 'An overline is a line longer than 5 stones. ' + {
-        legal: 'It is legal to play but does not count as a win — you still need an exact 5 elsewhere.',
-        forbidden: 'Forming one is an illegal move.',
-        forbiddenBlack: 'Forming one is an illegal move for Black — White still wins with it, like a regular five.',
-      }[rules.overline as 'legal' | 'forbidden' | 'forbiddenBlack'],
-      showBoard: false,
+    ...(rules.threeThree ? [{
+      title: 'What is a free-three?',
+      category: 'Free-three' as const,
+      text: 'A free-three is an alignement of three stones that, if not immediately blocked, allows for an indefendable alignment of four stones (that’s to say an alignment of four stones with two unobstructed extremities). Both are free-threes:',
+      showBoard: true,
+      beforeLabel: 'Case 1',
+      beforeBoard: createHelpBoard([
+        { row: 3, col: 2, player: 1 },
+        { row: 3, col: 3, player: 1 },
+        { row: 3, col: 4, player: 1 },
+      ]),
+      afterLabel: 'Case 2',
+      afterBoard: createHelpBoard([
+        { row: 3, col: 2, player: 1 },
+        { row: 3, col: 4, player: 1 },
+        { row: 3, col: 5, player: 1 },
+      ]),
     }] : []),
     ...(rules.fourFour ? [{
-      title: 'Double-four',
-      category: 'Forbidden' as const,
-      text: 'A double-four is a move that creates two separate four-threats at the same time. This move is forbidden for Black (Renju-style — there is no "both players" setting for this rule).',
+      title: 'What is a double-four?',
+      category: 'Double-four' as const,
+      text: 'A four-threat is an alignment of four stones that can become five on the next move. Both of these count as a four-threat:',
+      showBoard: true,
+      beforeLabel: 'Case 1 (open)',
+      beforeBoard: createHelpBoard([
+        { row: 3, col: 2, player: 1 },
+        { row: 3, col: 3, player: 1 },
+        { row: 3, col: 4, player: 1 },
+        { row: 3, col: 5, player: 1 },
+      ]),
+      afterLabel: 'Case 2 (blocked on one side)',
+      afterBoard: createHelpBoard([
+        { row: 3, col: 1, player: 2 },
+        { row: 3, col: 2, player: 1 },
+        { row: 3, col: 3, player: 1 },
+        { row: 3, col: 4, player: 1 },
+        { row: 3, col: 5, player: 1 },
+      ]),
+    }] : []),
+    // Double-trois et double-quatre sont tous les deux des "coups interdits"
+    // dans General (c'est une règle du jeu, pas un concept comme Free-three/
+    // Double-four/Overline) : une seule bulle, dont le texte s'adapte à ce
+    // qui est réellement actif, plutôt que deux bulles séparées.
+    ...(rules.threeThree || rules.fourFour || rules.overline === 'forbidden' || rules.overline === 'forbiddenBlack' ? [{
+      title: 'Forbidden Moves',
+      category: 'General' as const,
+      text: [
+        ...(rules.threeThree ? [
+          'A double-three is a move that introduces two simultaneous free-three alignments. But the move in a would be legal:\n' +
+          (rules.capture
+            ? '• Case 1: If it captures a pair of opponent stones\n• Case 2: If one of the free-threes would be obstructed'
+            : '• If one of the free-threes would be obstructed')
+        ] : []),
+        ...(rules.fourFour ? ['A double-four is a move that creates two separate four-threats at the same time. This move is forbidden for Black (Renju-style — there is no "both players" setting for this rule).'] : []),
+        ...(rules.overline === 'forbidden' ? ['Forming an overline (a line longer than 5 stones) is an illegal move.'] : []),
+        ...(rules.overline === 'forbiddenBlack' ? ['Forming an overline (a line longer than 5 stones) is an illegal move for Black.'] : []),
+      ].join('\n\n'),
+      // Le diagramme illustre les deux exceptions (capture / obstruction) :
+      // sans capture activée, seule l'obstruction s'applique, donc pas de
+      // diagramme à deux cas pertinent.
+      showBoard: !!rules.threeThree && rules.capture,
+      beforeLabel: 'Case 1',
+      beforeBoard: createHelpBoard([
+        { row: 2, col: 3, player: 1 },
+
+        { row: 3, col: 0, player: 1 },
+        { row: 3, col: 1, player: 2 },
+        { row: 3, col: 2, player: 2 },
+        { row: 3, col: 3, player: 3 },
+        { row: 3, col: 4, player: 1 },
+        { row: 3, col: 5, player: 1 },
+
+        { row: 4, col: 3, player: 1 },
+      ]),
+      afterLabel: 'Case 2',
+      afterBoard: createHelpBoard([
+          { row: 1, col: 1, player: 1 },
+          { row: 2, col: 2, player: 1 },
+          { row: 4, col: 4, player: 5 },
+          { row: 4, col: 3, player: 4 },
+          { row: 4, col: 5, player: 1 },
+          { row: 4, col: 6, player: 1 },
+      ]),
+    }] : []),
+    // Le concept ("c'est quoi un overline") reste ici ; s'il est interdit
+    // (illegal move), cette conséquence est expliquée dans "Forbidden
+    // Moves" (General), avec les autres coups interdits.
+    ...(rules.overline !== 'win' ? [{
+      title: 'Overline',
+      category: 'Overline' as const,
+      text: 'An overline is a line longer than 5 stones. ' + {
+        legal: 'It is legal to play but does not count as a win — you still need an exact 5 elsewhere.',
+        forbidden: 'It never counts as a win.',
+        forbiddenBlack: 'White still wins with it, like a regular five.',
+      }[rules.overline as 'legal' | 'forbidden' | 'forbiddenBlack'],
       showBoard: false,
     }] : []),
   ]
