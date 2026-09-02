@@ -42,10 +42,11 @@ function GomokuBoard({ mode, rules, onUpdate, onBotResponseTime }: GomokuBoardPr
 
   const handleUndo = () => {
     if (history.length === 0) return
-    const snapshot = history.at(-1)
+    const steps = mode !== 'local' && history.length > 1 ? 2 : 1
+    const snapshot = history.at(-steps)
     if (!snapshot) return
     setGameState(new Gomoku(snapshot))
-    setHistory(history.slice(0,-1))
+    setHistory(history.slice(0, -steps))
     onBotResponseTime?.(null)
   }
 
@@ -133,20 +134,18 @@ function GomokuBoard({ mode, rules, onUpdate, onBotResponseTime }: GomokuBoardPr
   return (
     <div className="w-full">
       <div className="relative mx-auto w-full max-w-[min(88vmin,76vh,720px)] sm:max-w-[min(84vmin,72vh,680px)]">
-        {mode === 'training' || mode === 'local' ? (
-          <div className="mb-3 flex justify-end">
-            <div className="flex gap-3">
-              <button
-                type="button"
-                onClick={handleUndo}
-                disabled={history.length === 0 || isLocked}
-                className="rounded-full border border-amber-400/20 bg-amber-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-amber-100 transition hover:border-amber-400/40 hover:bg-amber-300/15 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Undo last move
-              </button>
-            </div>
+        <div className="mb-3 flex justify-end">
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={handleUndo}
+              disabled={history.length === 0 || isLocked}
+              className="rounded-full border border-amber-400/20 bg-amber-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-amber-100 transition hover:border-amber-400/40 hover:bg-amber-300/15 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Undo last move
+            </button>
           </div>
-        ) : null}
+        </div>
 
         <>
           <GomokuBoardSurface
@@ -173,15 +172,13 @@ function GomokuBoard({ mode, rules, onUpdate, onBotResponseTime }: GomokuBoardPr
                   >
                     New game
                   </button>
-                  {mode === 'training' || mode === 'local' ? (
-                    <button
-                      type="button"
-                      onClick={handleUndo}
-                      className="rounded-full border border-amber-400/20 bg-amber-300/10 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-amber-100 transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Undo last move
-                    </button>
-                  ) : null}
+                  <button
+                    type="button"
+                    onClick={handleUndo}
+                    className="rounded-full border border-amber-400/20 bg-amber-300/10 px-5 py-3 text-sm font-semibold uppercase tracking-[0.18em] text-amber-100 transition hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Undo last move
+                  </button>
                 </div>
               </div>
             </div>

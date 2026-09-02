@@ -120,7 +120,7 @@ export class Gomoku {
       this.moves = [...init.moves]
       this.result = init.result
       this.threats = []
-      this.delayedWin = false
+      this.delayedWin = init.delayedWin
     } else {
       this.rules = init
       this.boardSize = boardSizeForGrid(init.grid)
@@ -247,7 +247,11 @@ export class Gomoku {
         return opponent
 
       if (this.delayedWin) {
+        this.delayedWin = false
+        const savedPlayer = this.player
+        this.player = opponent
         const opponent5Lines = this.getThreats(this.moves.at(-1)!, 5).filter(({type}) => type === '5')
+        this.player = savedPlayer
 
         if (opponent5Lines.length) {
           if (this.score[player] >= 10)
