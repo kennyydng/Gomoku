@@ -331,8 +331,8 @@ export class Gomoku {
   }
 
   getSection(pos: Position, dir: Direction): [number,Section] {
-    const offset_x =  pos[0]*dir[0]
-    const offset_y = (pos[1]*dir[1] + this.boardSize) % this.boardSize
+    const offset_x = pos[0]*dir[0]
+    const offset_y = pos[1]*dir[1] + (dir[1] < 0 ? this.boardRange : 0)
     const offset =
       dir[0] === 0 ? offset_y :
       dir[1] === 0 ? offset_x :
@@ -504,7 +504,10 @@ class Section extends Array<Stone> {
       const plays = [line[0]-1,line[1]]
       const ext = plays.map((play) => this.threatOf(play, rules, player, min+1))
 
-      const is5 = (i: number) => (ext[i].type === '5')
+      const is5 = (i: number) => (
+        ext[i].type === '5' ||
+        (ext[i].type === 'overline' && rules.overlineWins && !rules.overlineForbidden)
+      )
       const linePointOr = (i: number, index: number, fallback: number) => {
         const maybeLine = ext[i].line
         if (!maybeLine)
