@@ -286,14 +286,8 @@ Outcome Gomoku::applyMove(Pos pos) {
 
 	Outcome outcome{};
 
-	if (rules.capture) {
-		if (captures[mover] >= 10 && captures[!mover] >= 10)
-			outcome = {Result::Draw, false};
-		else if (captures[mover] >= 10)
-			outcome = {Result::Win, mover};
-		else if (captures[!mover] >= 10)
-			outcome = {Result::Win, !mover};
-	}
+	if (rules.capture && captures[mover] >= 10)
+		outcome = {Result::Win, mover};
 
 	if (outcome.state == Result::Ongoing && wasDelayed) {
 		const int len = runLenOf(dStart, dEnd, dDir);

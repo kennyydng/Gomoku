@@ -136,12 +136,16 @@ static std::vector<Pos> generateCandidates(Gomoku &state, bool checkLegality) {
 		// aucune ligne) note 0 et se fait éliminer par MAX_BRANCH dès que 6
 		// coups "normaux" existent sur le plateau — invisible à toute la
 		// recherche. wouldCapture couvre l'attaque (je capture) et la
-		// défense (l'adversaire capturerait s'il jouait ici).
+		// défense (l'adversaire capturerait s'il jouait ici). Le poids
+		// croît avec le nombre de paires déjà prises (dérivée du bonus
+		// quadratique captures² d'evaluate()) : sinon la 9e paire pèse
+		// autant que la 1ère ici, et un blocage vital de fin de partie se
+		// fait éliminer par des motifs plus "voyants" ailleurs.
 		if (state.captureRule()) {
 			if (state.wouldCapture(pos, player))
-				ownScore += W_CAPTURE;
+				ownScore += W_CAPTURE * (2 * (int)state.score(player) + 1);
 			if (state.wouldCapture(pos, !player))
-				oppScore += W_CAPTURE;
+				oppScore += W_CAPTURE * (2 * (int)state.score(!player) + 1);
 		}
 
 		scored.push_back({ownScore + (int)(BLOCK_FACTOR * oppScore), pos});
@@ -264,17 +268,30 @@ static int negamax(Gomoku &state, int depth, int alpha, int beta) {
 	const int origAlpha = alpha;
 	int best = -INF_SCORE;
 	Pos bestMove = moves.front();
+	bool first = true;
 	for (Pos m : moves) {
 		expandBox(m);
 		Outcome outcome = state.applyMove(m);
 		int v;
-		if (outcome.state == Result::Win)
+		if (outcome.state == Result::Win) {
 			v = MATE_SCORE + depth;
-		else if (outcome.state == Result::Draw)
+		} else if (outcome.state == Result::Draw) {
 			v = 0;
-		else
+		} else if (first) {
 			v = -negamax(state, depth - 1, -beta, -alpha);
+		} else {
+			// PVS/negascout : le coup de la TT est essayé en premier (voir le
+			// rotate ci-dessus), donc les suivants sont a priori pires que
+			// `alpha` — une recherche à fenêtre nulle suffit à le confirmer,
+			// bien moins chère qu'une fenêtre complète. Si l'hypothèse est
+			// fausse (le coup est en fait meilleur), on ne re-cherche à
+			// fenêtre complète que dans ce cas, plus rare.
+			v = -negamax(state, depth - 1, -alpha - 1, -alpha);
+			if (v > alpha && v < beta)
+				v = -negamax(state, depth - 1, -beta, -alpha);
+		}
 		state.undo();
+		first = false;
 
 		if (v > best) {
 			best = v;

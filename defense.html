@@ -455,20 +455,17 @@ constexpr size_t bitof(const Pos &amp;pos) const { return pos.x + (pos.y % LINES
       </div>
       <p>Poser une pierre, la retirer, tester une case : trois opérations bit-à-bit (<span class="mono">|=</span>, <span class="mono">&amp;= ~</span>, <span class="mono">&amp;</span>), chacune en O(1) réel — pas d'accès mémoire dispersé, tout tient dans quelques registres. C'est ce qui rend des centaines de milliers d'appels à <span class="mono">play()</span>/<span class="mono">undo()</span> par coup jouable en 460ms.</p>
 
-      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Rules — la chaîne de 9 caractères</h3>
-      <p>Le bot reçoit les règles actives sous forme compacte : un caractère pour la taille de grille, puis 8 caractères pour les règles booléennes, chacun pouvant valoir <span class="mono">'0'</span>, <span class="mono">'1'</span> ou <span class="mono">'b'</span> (règle active seulement pour les noirs — utile pour le Renju, où certaines interdictions ne s'appliquent qu'au premier joueur).</p>
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Rules — la chaîne de 6 caractères</h3>
+      <p>Le bot reçoit les règles actives sous forme compacte : un caractère pour la taille de grille, puis 5 caractères pour les règles. <span class="mono">pass</span> et <span class="mono">flanking</span> (règle Caro) ont été retirés du jeu ; <span class="mono">overline</span> n'est plus deux booléens séparés (gagnant + interdit) mais un seul caractère à 4 valeurs, pour ne plus pouvoir décrire une combinaison incohérente (ex: gagnante ET interdite en même temps) — voir <span class="mono">OverlineRule</span> côté frontend (Gomoku.ts).</p>
       <div class="tbl-wrap">
         <table class="tbl">
-          <tr><th>Index</th><th>Règle</th><th>Mandatory ?</th></tr>
-          <tr><td class="num">0</td><td>taille de grille (5=15×15, 9=19×19)</td><td>19×19 imposé</td></tr>
-          <tr><td class="num">1</td><td>pass autorisé</td><td>bonus</td></tr>
-          <tr><td class="num">2</td><td>capture activée</td><td>oui</td></tr>
-          <tr><td class="num">3</td><td>capture de fin de partie (five imparfait)</td><td>oui</td></tr>
-          <tr><td class="num">4</td><td>foul overline</td><td>bonus (Renju)</td></tr>
-          <tr><td class="num">5</td><td>overline compte comme victoire</td><td>oui (5+ gagne)</td></tr>
-          <tr><td class="num">6</td><td>double-trois interdit</td><td>oui</td></tr>
-          <tr><td class="num">7</td><td>double-quatre interdit</td><td>bonus</td></tr>
-          <tr><td class="num">8</td><td>flanking (règle Caro)</td><td>bonus</td></tr>
+          <tr><th>Index</th><th>Règle</th><th>Valeurs</th><th>Mandatory ?</th></tr>
+          <tr><td class="num">0</td><td>taille de grille</td><td><span class="mono">'5'</span> = 15×15, <span class="mono">'9'</span> = 19×19</td><td>19×19 imposé</td></tr>
+          <tr><td class="num">1</td><td>capture activée</td><td><span class="mono">'0'</span> / <span class="mono">'1'</span></td><td>oui</td></tr>
+          <tr><td class="num">2</td><td>capture de fin de partie (five imparfait)</td><td><span class="mono">'0'</span> / <span class="mono">'1'</span></td><td>oui</td></tr>
+          <tr><td class="num">3</td><td>overline</td><td><span class="mono">'1'</span> victoire (les deux), <span class="mono">'0'</span> légal sans gagner, <span class="mono">'f'</span> interdit (les deux), <span class="mono">'b'</span> interdit pour noir / victoire pour blanc (Renju)</td><td>oui (<span class="mono">'1'</span>)</td></tr>
+          <tr><td class="num">4</td><td>double-trois interdit</td><td><span class="mono">'0'</span> / <span class="mono">'1'</span> / <span class="mono">'b'</span> (noir seulement)</td><td>oui</td></tr>
+          <tr><td class="num">5</td><td>double-quatre interdit</td><td><span class="mono">'0'</span> / <span class="mono">'1'</span> / <span class="mono">'b'</span> (noir seulement)</td><td>bonus</td></tr>
         </table>
       </div>
     </section>

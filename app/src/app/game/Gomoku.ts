@@ -241,10 +241,8 @@ export class Gomoku {
       .filter(() => resolveOverline(this.rules.overline, player).wins)
 
     if (this.rules.capture) {
-      if (this.score[opponent] >= 10 && this.score[player] >= 10)
-        return 'draw'
-      if (this.score[opponent] >= 10) // possible via auto-capture
-        return opponent
+      if (this.score[player] >= 10)
+        return player
 
       if (this.delayedWin) {
         this.delayedWin = false
@@ -253,16 +251,9 @@ export class Gomoku {
         const opponent5Lines = this.getThreats(this.moves.at(-1)!, 5).filter(({type}) => type === '5')
         this.player = savedPlayer
 
-        if (opponent5Lines.length) {
-          if (this.score[player] >= 10)
-            return 'draw'
-          else
-            return opponent
-        }
+        if (opponent5Lines.length)
+          return opponent
       }
-
-      if (this.score[player] >= 10)
-        return player
 
       if (playerOverlines.length) {
         return player
