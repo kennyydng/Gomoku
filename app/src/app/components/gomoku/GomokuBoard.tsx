@@ -30,9 +30,10 @@ function GomokuBoard({ mode, rules, onUpdate, onBotResponseTime }: GomokuBoardPr
     isLocked,
     historyLength,
     handleUndo,
-    hintCell,
     hoveredCell,
     setHoveredCell,
+    getHint,
+    hintCell,
     handleHumanMove,
   } = useGomokuGame({ mode, rules, onUpdate, onBotResponseTime })
 
@@ -45,9 +46,17 @@ function GomokuBoard({ mode, rules, onUpdate, onBotResponseTime }: GomokuBoardPr
           <div className="mb-3 flex justify-end">
             <button
               type="button"
+              onClick={getHint}
+              disabled={isLocked}
+              className="margin-left-2 rounded-full border border-amber-400/20 bg-amber-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-amber-100 transition hover:border-amber-400/40 hover:bg-amber-300/15 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Get hint
+            </button>
+            <button
+              type="button"
               onClick={handleUndo}
               disabled={historyLength === 0 || isLocked}
-              className="rounded-full border border-amber-400/20 bg-amber-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-amber-100 transition hover:border-amber-400/40 hover:bg-amber-300/15 disabled:cursor-not-allowed disabled:opacity-40"
+              className="margin-left-2 rounded-full border border-amber-400/20 bg-amber-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-amber-100 transition hover:border-amber-400/40 hover:bg-amber-300/15 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Undo last move
             </button>

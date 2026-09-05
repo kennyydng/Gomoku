@@ -23,14 +23,14 @@ export default function GamePage() {
   const router = useRouter()
   const mode = useSearchParams()?.get('mode')
   const rules = {
-    capture: true,
-    captureUnperfect: true,
+    pass: true,
+    capture: false,
+    captureUnperfect: false,
     foulOverline: false,
     overline: false,
-    threeThree: true,
+    threeThree: false,
     fourFour: false,
     flanking: false,
-    pass: true,
   }
 
   const [botResponseMs, setBotResponseMs] = useState<number | null>(null)

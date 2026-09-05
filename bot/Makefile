@@ -3,15 +3,13 @@
 
 .DEFAULT_GOAL = all
 
-MKDBG=
-
-include Makefile.vars
+include vars.mk
 
 include make/clean.mk
 include make/mkdir.mk
 
-include make/objects.mk
 include make/targets.mk
+include make/objects.mk
 
 re: fclean all
 

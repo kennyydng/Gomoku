@@ -118,7 +118,7 @@ function GomokuBoardSurface({ game, isLocked, hintCell, hoveredCell, onCellHover
             height: `${SIZE}%`, top : `${MIN}%`,
           }}
         >
-          <tbody> {cells} </tbody>
+          <tbody>{cells}</tbody>
         </table>
       </div>
     </div>

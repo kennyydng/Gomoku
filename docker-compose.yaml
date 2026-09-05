@@ -2,20 +2,20 @@
 services:
   gomoku:
     build: .
-    entrypoint: [npm,run,dev]
+    entrypoint: [bash,/var/docker-entrypoint.sh]
     ports: [3000:3000]
+    environment:
+      - TZ=Europe/Paris
     volumes:
-      - ./profile:/var/profile
-      - ./app/src:/var/www/app/src
-      - ./bot/inc:/var/www/app/bot/inc
-      - ./bot/src:/var/www/app/bot/src
-    #develop:
-    #  watch:
-    #    #- action: rebuild
-    #    #  path: bot
-    #    - action: sync
-    #      path: bot
-    #      target: /var/www/app/bot
-    #    - action: sync
-    #      path: app
-    #      target: /var/www/app
+      - ./logs:/var/logs
+        #- ./app/src:/var/www/app/src
+        #- ./bot/inc:/var/www/app/bot/inc
+        #- ./bot/src:/var/www/app/bot/src
+    develop:
+      watch:
+        - action: sync
+          path: bot
+          target: /var/www/app/bot
+        - action: sync
+          path: app
+          target: /var/www/app

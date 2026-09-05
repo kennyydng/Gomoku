@@ -1,27 +1,27 @@
 
-MD_SUFFIX=~MD5
+md5sum = $(shell md5sum <<< "$1" | cut -d' ' -f1)
+MD5 = $(call md5sum,$(MDKEY))
 
-objects=$(1:$S%=$O%.o)
-sources=$(1:$O%.o=$S%)
+OBJ_PRINT ?= Compiling [$(*:$(MD5)/%=$O/%)] from [$<]
+#OBJ_PRINT ?= $(CXX) -o $(*:$(MD5)/%=$O/%) $(CXXFLAGS) -c $<
+P=%
 
+$M/%.o: SOURCE=$(patsubst $(MD5)/$P,$S/$P,$*)
 .SECONDARY:
-%$(MD_SUFFIX): $$(call sources,$$(basename $$*)) | mkpath@$$(@D)/
+$M/%.o: $$(SOURCE) | mkpath@$$(@D)/ mkpath@logs/$$(dir $$(SOURCE))/
+	@echo $(OBJ_PRINT)
 	$(call GC,clean,$@.d)
-	@echo $(CXX) -c $< $(CXXFLAGS) -o $(basename $*)[MD5]
-	@$(CXX) -c $< $(CXXFLAGS) -o $@ -MMD -MP -MF $@.d
+	$(call GC,clean,logs/$@.logs)
+	@set -o pipefail; \
+		$(CXX) -o $@ $(CXXFLAGS) -c $< -MMD -MP -MF $@.d \
+		$(if $(CXXLOG),2>&1 | $(CXXLOG),)
 	$(call GC,clean,$@)
-	@ echo "$@: OFLAGS=$(CXXFLAGS)" >> $@.d
+	@# echo "$@: OFLAGS=$(CXXFLAGS)" >> $@.d
 
-md5mode = $(shell echo "$1" | md5sum | cut -d' ' -f1)
-%.o: MDFILE=$@.$(call md5mode,$(call MDKEY))$(MD_SUFFIX)
-
-.INTERMEDIATE:
-%.o: $$(MDFILE)
-	@ln -f$(if $(MKDBG),v) $< $@
+$O/%.o: MDFILE=$M/$(MD5)/$*.o
+$O/%.o: $$(MDFILE) | mkpath@$$(@D)/
+	@ln -f $< $@
 	$(call GC,clean,$@)
-
-.PHONY: relink
 
 rwildcard=$(foreach d,$(wildcard $(1:=/*)),$(filter $(subst *,%,$2),$d) $(call rwildcard,$d,$2))
-$(info $(call rwildcard,$O,$(MD_SUFFIX)))
--include $(patsubst %,%.d,$(call rwildcard, $O,*$(MD_SUFFIX)))
+-include $(patsubst %,%.d,$(call rwildcard,$M,*.o))

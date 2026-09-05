@@ -52,10 +52,11 @@ export function useGomokuGame({
 
     setGameState(new Gomoku(snapshot))
     setHistory(history.slice(0,-1))
+    setHintCell(null)
     onBotResponseTime?.(null)
   }
 
-  const isHumanMove = mode === 'local' || game.player == aiPlayer;
+  const isHumanMove = mode === 'local' || game.player != aiPlayer;
   const isLocked = !isHumanMove || game.result !== null;
   const shouldSuggestMove = mode === 'local' || mode === 'training'
 
@@ -69,6 +70,7 @@ export function useGomokuGame({
         const next = new Gomoku(game)
         next.applyResolvedMove(move)
         setGameState(next)
+        setHintCell(null)
     }
   }
 
@@ -92,7 +94,7 @@ export function useGomokuGame({
       if (!response.ok)
         throw new Error('Bot response failed')
 
-      const data: { move?: Position, time?: number } = await response.json()
+      const data: { move: Position | null, time: number } = await response.json()
       onBotResponseTime?.(data.time)
       return data.move
     } catch (e) {
@@ -104,10 +106,11 @@ export function useGomokuGame({
 
   const handleAIMove = async (controller) => {
     const pos = await fetchBotMove(controller)
-    if (pos) return
+    console.log(pos);
+    if (!pos) return
 
-    const move = game.resolveMove(data.move)
-    if (move) return
+    const move = game.resolveMove(pos.move)
+    if (!move) return
 
     const next = new Gomoku(game)
     next.applyResolvedMove(move)
@@ -115,6 +118,7 @@ export function useGomokuGame({
   }
 
   const handleAIHint = async (controller) => {
+    setHintCell(null)
     const pos = await fetchBotMove(controller)
     if (pos) setHintCell(pos)
   }
@@ -132,7 +136,6 @@ export function useGomokuGame({
     }
   }, [game])
 
-
   return {
     game,
     resetGame,
@@ -141,6 +144,7 @@ export function useGomokuGame({
     handleUndo,
     setHoveredCell,
     hoveredCell,
+    getHint: handleAIHint,
     hintCell,
     handleHumanMove
   }

@@ -1,6 +1,19 @@
-# VIM: let b:vsh_lvl=0
+# VIM: let b:vsh_lvl=2
 
-docker compose up --build gomoku
+docker image prune --all
+
+#<
+docker buildx create \
+		   --name container \
+		   --driver=docker-container \
+		   --driver-opt default-load=true
+#>
+docker buildx use default
+docker buildx use container
+
+docker compose up --build --watch gomoku
+docker ps -a
+
 docker compose run --rm --build gomoku make -C bot
 docker compose exec gomoku bash
 

@@ -1,189 +1,130 @@
 
-#ifndef __GOMOKU_CLASS_HPP__
-# define __GOMOKU_CLASS_HPP__
+#pragma once
 
-# include <iostream>
-# include <cstdint>
-# include <vector>
-# include <cassert>
+#include <iostream>
+#include <cstdint>
+#include <vector>
 
-# include "utils.hpp"
+#include "sugar.hpp"
+#include "parsing_utils.hpp"
+#include "gomoku_types.hpp"
+#include "BitBoard.class.hpp"
 
-# define SIZE 19
+using namespace sugar;
 
-struct Rules {
-	bool pass;
+class score_t {
+	long value;
 
-	bool capture;
-	bool captureUnperfect;
-
-	struct {
-		bool foulOverline;
-		bool overline;
-
-		bool threeThree;
-		bool fourFour;
-		bool flanking;
-	} players[2];
-
-	Rules(std::string str) {
-			if (str.size() != 8)
-				throw std::runtime_error("Invalid rules");
-
-			pass                    	 = (str[0] == '1');
-			capture                 	 = (str[1] == '1');
-			captureUnperfect        	 = (str[2] == '1');
-			players[0].foulOverline 	 = (str[3] == '1'); players[1].foulOverline 	 = (str[3] ==  '1' || str[3] ==  'b');
-			players[0].overline     	 = (str[4] == '1'); players[1].overline     	 = (str[4] ==  '1' || str[4] ==  'b');
-			players[0].threeThree   	 = (str[5] == '1'); players[1].threeThree   	 = (str[5] ==  '1' || str[5] ==  'b');
-			players[0].fourFour     	 = (str[6] == '1'); players[1].fourFour     	 = (str[6] ==  '1' || str[6] ==  'b');
-			players[0].flanking     	 = (str[7] == '1'); players[1].flanking     	 = (str[7] ==  '1' || str[7] ==  'b');
-		}
-};
-
-class Stone {
+	static constexpr long line_values[6] = {0, 1, 5, 50, 1000, 50000};
 public:
-	enum type : uint8_t {
-		NONE  = 0b00, ERROR = 0b11,
-		BLACK = 0b01, WHITE = 0b10
-	};
-private:
-	type content;
-public:
-	Stone() : content(NONE) {}
-	Stone(type stone) : content(stone) {}
-	Stone(bool p0, bool p1) : content((type)(p0 | p1 << 1)) {}
-
-	bool empty() const
-		{ return content == NONE; };
-	bool player() const
-		{ return content == WHITE; };
-
-	bool operator==( const Stone &rhs ) const = default;
-
-	friend std::ostream &operator<<(std::ostream &os, const Stone &cell) {
-			switch (cell.content) {
-				case NONE: os << "┼"; break;
-				case BLACK: os << "○"; break;
-				case WHITE: os << "●"; break;
-				default: os << "?";
+	constexpr auto upgrade_updater(bool P)
+		TO( [&,sign = P?1:-1]<size_t I>(unsigned long delta) {
+			if constexpr (I == 5) return;
+			else {
+				value += sign * delta * (line_values[I+1] - line_values[I]);
 			}
-			return os;
-		};
-};
+		} )
 
-struct Pos {
-	int8_t x;
-	int8_t y;
+	constexpr auto block_updater(bool P)
+		TO( [&,sign = P?1:-1]<size_t I>(unsigned long delta) {
+			if constexpr (I == 0) return;
+			else {
+				value += sign * delta * line_values[I];
+			}
+		} )
 
-	bool valid() const
-		{ return uint8_t(x) < SIZE && uint8_t(y) < SIZE; };
+	constexpr std::strong_ordering operator<=>(this score_t const &lhs, score_t const &rhs)
+		{ return lhs.value <=> rhs.value; }
 
-	Pos operator+( this Pos lhs, Pos rhs )
-		{ return {int8_t(lhs.x + rhs.x), int8_t(lhs.y + rhs.y)}; };
-	Pos operator*( this Pos lhs, int8_t rhs )
-		{ return {int8_t(lhs.x * rhs  ), int8_t(lhs.y * rhs  )}; };
-
-	friend std::istream &operator>>(std::istream &is, Pos &pos) {
-			short x,y;
-			is >> x >> Expect(":") >> y;
-			pos = {(int8_t)x,(int8_t)y};
-			return is;
-		};
-	friend std::ostream &operator<<(std::ostream &os, const Pos &pos)
-		{ return os << (int)pos.x << ":" << (int)pos.y; };
-};
-
-constexpr Pos DIRECTIONS[8] = {
-		{ 1, 0}, { 0, 1}, 
-		{ 1, 1}, { 1,-1},
-	};
-constexpr Pos SUBDIRECTIONS[8] = {
-		{-1,-1},{ 0,-1},{ 1,-1},
-		{-1, 0},        { 1, 0},
-		{-1, 1},{ 0, 1},{ 1, 1},
-	};
-
-class BitBoard {
-	static constexpr size_t X = SIZE;
-	static constexpr size_t Y = SIZE;
-
-	using WORD = unsigned long long;
-	static constexpr size_t WORD_BITS = 8*sizeof(WORD);
-	static constexpr size_t LINES_PER_WORD = WORD_BITS / X;
-	static_assert(LINES_PER_WORD >= 3);
-	static constexpr size_t WORD_COUNT = (LINES_PER_WORD+Y-1) / LINES_PER_WORD;
-	static_assert(WORD_COUNT <= 8);
-
-	WORD words[WORD_COUNT] = {};
-
-	constexpr WORD wordof(const Pos &pos) const
-		{ return words[pos.y / LINES_PER_WORD]; };
-	constexpr WORD &wordof(const Pos &pos)
-		{ return words[pos.y / LINES_PER_WORD]; };
-
-	constexpr size_t bitof(const Pos &pos) const
-		{ return pos.x + (pos.y % LINES_PER_WORD) * X; };
-public:
-	bool operator[](Pos pos) const
-		{
-			assert(pos.valid());
-			return 1ull & wordof(pos)>>bitof(pos);
-		};
-	BitBoard &operator+=(Pos pos)
-		{ wordof(pos) |= 1ull<<bitof(pos); return *this; };
-	BitBoard &operator-=(Pos pos)
-		{ wordof(pos) &= ~(1ull<<bitof(pos)); return *this; };
+	friend std::ostream &operator<<(std::ostream &o, score_t const &score)
+		{ return o << "{" << score.value << "}"; }
 };
 
 struct Move {
 	Pos pos;
-	uint16_t captures;
+//#if R_CAPTURE
+//	uint16_t captures;
+//#endif
 };
 
 class Gomoku {
 public:
-	Gomoku(const Rules &rules)
-		: rules(rules), moves(), captures(0,0), stones() {};
-	~Gomoku() {};
+	Gomoku() {_moves.reserve(SIZE*SIZE);}
+	Gomoku(Gomoku const &) = default;
+	~Gomoku() {}
 
 	unsigned turn() const
-		{ return moves.size(); };
+		{ return _moves.size(); }
 	bool player() const
-		{ return turn() % 2; };
-	unsigned score(unsigned player) const
-		{ return captures[player]; };
+		{ return turn() % 2; }
+	score_t const &heuristic() const
+		{ return _score; }
 
-	static void forall(auto &&f) {
-			for (int8_t y = 0; y < SIZE; y++)
-				for (int8_t x = 0; x < SIZE; x++)
-					f(Pos{x,y});
+	NOINLINE bool is_over() const {
+			template for (constexpr size_t AX : index_of(AXES)) {
+				if (
+					vec::any( std::get<AX>(_info[0].lines).of(5).get_words() ) ||
+					vec::any( std::get<AX>(_info[1].lines).of(5).get_words() )
+				) return true;
+			}
+			return false;
 		}
 
-	Stone stone( Pos pos ) const
-		{ return {stones[0][pos], stones[1][pos]}; };
+	auto const &player_info(bool p) const
+		{ return _info[p]; }
+
+//#if R_CAPTURE
+//	unsigned score(unsigned player) const
+//		{ return captures[player]; };
+//#endif
+
+	Stone stone(Pos pos) const
+		{ return {player_info(0).stones[pos], player_info(1).stones[pos]}; }
 
 	template<class F>
-	auto with_move( Pos move, F &&f )
-	-> decltype(auto) {
-			play(move);
-			f(*this);
-			undo();
+	auto with_move(this Gomoku copy, std::optional<Pos> move, F &&f) {
+			if (move) 	copy.play(*move);
+			else      	copy.pass();
+			auto ret = f(copy);
+			return ret;
 		}
 
-	void play(Pos move);
-	void undo();
+	void play(Pos);
+	void pass();
+	//void undo();
+
 private:
+	void place(Pos, bool);
+	//void take(Pos, bool);
 
-	const Rules rules;
-	std::vector< std::optional<Move> > moves;
-	unsigned captures[2];
+	template<size_t AX>
+	static constexpr auto Line(Pos pos)
+		{ return BitBoard<AX>::make_line(pos,5); }
 
-	BitBoard stones[2];
+	template<size_t AX>
+	static constexpr BitBoard<AX> LinesStart =
+		BitBoard<AX>(true).shift(AXES[AX]*-4);
 
-	unsigned test = 0b1010101010101010101010101010101;
+	struct PlayerInfo {
+		BitBoard<0> stones = {};
+
+		std::tuple<CountBoard<0,6>, CountBoard<1,6>, CountBoard<2,6>, CountBoard<3,6>>
+			lines = { LinesStart<0>, LinesStart<1>, LinesStart<2>, LinesStart<3> };
+//#if R_CAPTURE && R_CAPTURE_UNPERFECT
+//		BitBoard lines5[4] = {};
+//#endif
+//
+//		//BitBoard closed[2][1][4];
+//
+//#if R_CAPTURE
+//		unsigned captures = {0,0};
+//		BitBoard vulnerable;
+//#endif
+	} _info[2] = {};
+
+	std::vector<std::optional<Move>> _moves = {};
+	score_t _score = score_t();
+
+	friend std::ostream &operator<<(std::ostream &o, Gomoku const &gomoku);
+	friend BitBoard<0> candidates(Gomoku &state);
 };
-
-std::ostream &operator<<(std::ostream &o, Gomoku const &gomoku);
-
-#endif
