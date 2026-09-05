@@ -264,11 +264,11 @@ static std::vector<Pos> generateCandidates(Gomoku &state, bool checkLegality) {
 
 // --- Heuristique -----------------------------------------------------------
 
-[[maybe_unused]] static bool openAt(Gomoku &state, Pos p) {
+static bool openAt(Gomoku &state, Pos p) {
 	return p.valid() && state.stone(p).empty();
 }
 
-[[maybe_unused]] static bool stoneOf(Gomoku &state, Pos p, bool player) {
+static bool stoneOf(Gomoku &state, Pos p, bool player) {
 	if (!p.valid())
 		return false;
 	Stone s = state.stone(p);
@@ -314,23 +314,8 @@ static int evaluate(Gomoku &state) {
 	// feuille — la même optimisation que generateCandidates.
 	auto visit = [&](Pos pos){
 		Stone s = state.stone(pos);
-		if (s.empty()) {
-			bool hasNeighbor = false;
-			for (const Pos &d : SUBDIRECTIONS) {
-				Pos near = pos + d;
-				if (near.valid() && !state.stone(near).empty()) {
-					hasNeighbor = true;
-					break;
-				}
-			}
-			if (hasNeighbor && state.captureRule()) {
-				if (state.wouldCapture(pos, 0))
-					score[0] += W_CAPTURE * (2 * (int)state.score(0) + 1);
-				if (state.wouldCapture(pos, 1))
-					score[1] += W_CAPTURE * (2 * (int)state.score(1) + 1);
-			}
+		if (s.empty())
 			return;
-		}
 		bool player = s.player();
 
 		for (const Pos &dir : DIRECTIONS) {
@@ -343,6 +328,23 @@ static int evaluate(Gomoku &state) {
 			Pos before = pos - dir;
 			Pos after = end + dir;
 
+			// Capture potentielle, vue depuis la paire menacée plutôt qu'en
+			// sondant chaque case vide du plateau. La règle de capture est
+			// VIDE,C,C,!C : une paire capturable est donc forcément un
+			// alignement de longueur *exactement* 2 (à 3 pierres, la 3e
+			// occupe la place du captureur) avec un flanc vide et l'autre
+			// tenu par l'adversaire. On parcourt déjà les alignements, donc
+			// c'est gratuit — au lieu d'appeler wouldCapture() deux fois par
+			// case vide, ce qui était le poste le plus cher de la fonction.
+			if (state.captureRule() && len == 2) {
+				const bool taker = !player;
+				const bool emptyBeforeStoneAfter =
+					openAt(state, before) && stoneOf(state, after, taker);
+				const bool emptyAfterStoneBefore =
+					openAt(state, after) && stoneOf(state, before, taker);
+				if (emptyBeforeStoneAfter || emptyAfterStoneBefore)
+					score[taker] += W_CAPTURE * (2 * (int)state.score(taker) + 1);
+			}
 			bool openBefore = before.valid() && state.stone(before).empty();
 			bool openAfter = after.valid() && state.stone(after).empty();
 			gateBySpace(state, len, before, after, dir, openBefore, openAfter);
