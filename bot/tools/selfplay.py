@@ -96,7 +96,7 @@ def main():
     parser.add_argument("challenger", help="binaire à évaluer")
     parser.add_argument("baseline", help="binaire de référence")
     parser.add_argument("-n", "--games", type=int, default=10)
-    parser.add_argument("-r", "--rules", default="911111")
+    parser.add_argument("-r", "--rules", default="911110")
     parser.add_argument("-s", "--size", type=int, default=19)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--timeout", type=float, default=30.0)

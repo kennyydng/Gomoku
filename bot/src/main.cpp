@@ -2,6 +2,7 @@
 #include "Gomoku.class.hpp"
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <vector>
 
 // --- Génération de coups -----------------------------------------------
@@ -581,6 +582,14 @@ int main() {
 		std::cerr << "Result: ongoing" << std::endl;
 
 	if (outcome.state != Result::Ongoing)
+		return 0;
+
+	// Mode "résultat seul" : un pilote externe qui fait jouer deux camps a
+	// besoin de connaître l'état après CHAQUE coup, sinon une victoire est
+	// masquée par le coup suivant (le moteur rapporte le résultat du dernier
+	// coup rejoué, pas un état persistant). Sans ce mode il faudrait payer
+	// une recherche complète juste pour poser la question.
+	if (getenv("RESULT_ONLY"))
 		return 0;
 
 	auto start = std::chrono::steady_clock::now();
