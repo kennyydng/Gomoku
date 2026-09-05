@@ -650,7 +650,12 @@ return score[toMove] - score[!toMove];   <span class="c">// convention négamax<
       <p>Le score final est toujours <em>du point de vue du joueur qui doit jouer</em> (<span class="mono">score[toMove] - score[!toMove]</span>) — c'est la convention négamax, expliquée au chapitre suivant.</p>
 
       <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Le même calcul, recyclé pour trier les coups</h3>
-      <p><span class="mono">localPatternScore()</span> est la même idée que <span class="mono">patternWeight</span>, mais appliquée à une seule pierre hypothétique plutôt qu'au plateau entier — utilisée par <span class="mono">generateCandidates()</span> pour classer les coups avant même de lancer la recherche (voir chapitre 6). Un seul concept, deux usages : noter une position finale, et pré-trier les coups à explorer en premier.</p>
+      <p><span class="mono">localPatternScore()</span> reprend <span class="mono">patternWeight</span>, mais appliqué à une seule pierre hypothétique plutôt qu'au plateau entier — utilisé par <span class="mono">generateCandidates()</span> pour classer les coups avant de lancer la recherche (voir chapitre 6).</p>
+      <p>Il est volontairement <strong>plus grossier</strong> que <span class="mono">evaluate()</span> : ni le contrôle d'espace, ni les motifs cassés. Les deux fonctions n'ont pas le même métier. <span class="mono">evaluate()</span> fixe la <em>valeur</em> d'une feuille, où une imprécision se propage directement dans la décision. <span class="mono">localPatternScore</span> ne fait que <em>classer</em> des coups pour choisir lesquels explorer — il doit séparer un coup sérieux d'un coup médiocre, pas départager finement deux bons coups : la recherche s'en charge derrière.</p>
+      <div class="callout">
+        <span class="callout-label">Pourquoi ça compte : où passe vraiment le temps</span>
+        Les deux raffinements avaient d'abord été mis dans les <em>deux</em> fonctions, par symétrie. Un chronométrage a montré le déséquilibre : sur les 460ms du budget, <span class="mono">generateCandidates</span> pesait <strong>382ms</strong> et <span class="mono">evaluate</span> seulement <strong>58ms</strong> — parce que la première est appelée deux fois par case candidate à chaque nœud interne, la seconde une fois par feuille. Les retirer du tri (en les gardant dans l'évaluation) a rendu <strong>+54% de nœuds et un pli de profondeur</strong>, pour un score de self-play de 58,3% sur 24 parties. La finesse coûtait le plus cher exactement là où elle servait le moins.
+      </div>
     </section>
 
     <!-- ===================== CHAPITRE 5 ===================== -->

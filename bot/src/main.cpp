@@ -160,6 +160,18 @@ static int brokenBonus(Gomoku &state, Pos end, Pos dir, bool player, int len) {
 // Score de la pierre en `pos` (déjà posée) pour `player`, sommé sur ses 4
 // lignes. Quasi O(1) : chaque marche est bornée par la longueur (courte) de
 // l'alignement, sans récursion.
+//
+// Volontairement plus grossier qu'evaluate() : pas de gateBySpace ni de
+// brokenBonus ici. Les deux fonctions n'ont pas le même métier — evaluate()
+// fixe la *valeur* d'une feuille, où une imprécision se propage directement
+// dans la décision ; localPatternScore ne fait que *classer* des coups pour
+// choisir lesquels explorer, et la recherche corrige derrière. Or elle est
+// appelée deux fois par case candidate à chaque nœud interne, contre une
+// fois par feuille pour evaluate() : mesuré, generateCandidates pesait 382ms
+// des 460ms du budget, evaluate() seulement 58ms. Retirer ces deux raffinements
+// du tri (en les gardant dans evaluate) rend +54% de nœuds et un pli de
+// profondeur, pour un score de self-play de 58.3% sur 24 parties — la
+// finesse ne servait à rien là où elle coûtait le plus cher.
 static int localPatternScore(Gomoku &state, Pos pos, bool player) {
 	int total = 0;
 	for (const Pos &dir : DIRECTIONS) {
@@ -170,13 +182,7 @@ static int localPatternScore(Gomoku &state, Pos pos, bool player) {
 		Pos after = end + dir;
 		bool openBefore = before.valid() && state.stone(before).empty();
 		bool openAfter = after.valid() && state.stone(after).empty();
-		gateBySpace(state, len, before, after, dir, openBefore, openAfter);
 		total += patternWeight(len, (openBefore ? 1 : 0) + (openAfter ? 1 : 0));
-		// Les deux sens ici, contrairement à evaluate() : on ne regarde que
-		// les runs passant par `pos`, donc personne d'autre ne viendra
-		// examiner un trou situé en amont du groupe.
-		total += brokenBonus(state, end, dir, player, len);
-		total += brokenBonus(state, start, dir * -1, player, len);
 	}
 	return total;
 }
