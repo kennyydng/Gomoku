@@ -244,6 +244,19 @@ export class Gomoku {
       if (this.score[player] >= 10)
         return player
 
+      // Un five "imparfait" (cassable par une capture) a été posé au tour
+      // précédent : on vérifie maintenant s'il a survécu au coup qui vient
+      // d'être joué. Trois pièges ici, chacun a déjà causé un bug :
+      // - moves.at(-1) est bien le coup du five : le coup courant n'est
+      //   poussé qu'après le retour d'updateTurn (voir applyResolvedMove).
+      // - getThreats lit this.player, or la pierre appartient à l'adversaire
+      //   du joueur courant. Sans l'échange, getContiguous cherche la
+      //   mauvaise couleur, ne trouve jamais rien, et le five n'est jamais
+      //   validé.
+      // - le drapeau est consommé tout de suite : un seul tour de sursis,
+      //   sinon il serait re-testé sur des coups sans rapport.
+      // (Il doit aussi survivre au constructeur de copie — l'UI clone le
+      // Gomoku à chaque coup, et ne pas le recopier annulait tout ceci.)
       if (this.delayedWin) {
         this.delayedWin = false
         const savedPlayer = this.player
@@ -488,9 +501,9 @@ class Section extends Array<Stone> {
     const len = line[1] - line[0]
 
     // 'overline' n'est ici qu'un constat géométrique (ligne de 6+) : c'est
-    // au niveau de resolveMove/updateTurn, pas ici, que les règles overline
-    // (victoire ?) et foulOverline (coup illégal ?) décident chacune
-    // indépendamment quoi en faire pour ce joueur.
+    // au niveau de resolveMove/updateTurn, pas ici, que la règle overline du
+    // joueur (résolue par resolveOverline en {wins, forbidden}) décide quoi
+    // en faire.
     if (len > 5)
       return {type: 'overline', line}
     else if (len === 5) {

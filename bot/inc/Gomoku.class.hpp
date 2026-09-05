@@ -228,6 +228,8 @@ public:
 		{ return captures[player]; };
 	bool captureRule() const
 		{ return rules.capture; };
+	Pos lastMove() const
+		{ return moves.empty() ? Pos{-1,-1} : moves.back().pos; };
 	uint64_t zobrist() const
 		{ return hash; };
 

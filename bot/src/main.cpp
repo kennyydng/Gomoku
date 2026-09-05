@@ -15,27 +15,51 @@
 static constexpr int CANDIDATE_RADIUS = 1;
 // Réduit de 8 à 6 puis à 5 : les branches en plus changeaient peu la
 // qualité des coups mais faisaient exploser le temps en milieu de partie
-// (voir MIN_DEPTH plus bas, qui impose la profondeur 10 quel que soit le
-// temps que ça prend — réduire le branchement est le seul levier pour
-// respecter aussi le budget moyen sans risquer de rater cette profondeur).
+// (voir MIN_DEPTH plus bas : le palier 10 exigé par le sujet a droit à un
+// plafond de temps élargi, mais pas illimité — réduire le branchement est
+// le principal levier pour l'atteindre sans exploser le budget moyen).
 static constexpr size_t MAX_BRANCH = 5;
 static constexpr double BLOCK_FACTOR = 0.8;
 
-// Boîte englobante (élargie de CANDIDATE_RADIUS) de toutes les pierres
-// jouées depuis le début de la recherche. Ne fait que grandir : pas cher à
-// maintenir, et un coup hors de la boîte est par construction trop loin de
-// toute pierre pour être un candidat valable. Restreindre le scan à cette
-// boîte transforme generateCandidates() d'un O(taille²) en O(aire boîte),
-// ce qui compte vu que ça tourne à chaque nœud.
+// Boîtes englobantes (élargies de CANDIDATE_RADIUS) des groupes de pierres
+// jouées depuis le début de la recherche. Une seule box globale gaspille le
+// scan dès que deux échanges se jouent dans des coins opposés du plateau
+// (toute la zone vide entre les deux serait incluse) : on garde donc
+// plusieurs rectangles disjoints, un par groupe de pierres proches, fusionnés
+// dès qu'ils se recouvrent. Ne font que grandir/fusionner, jamais rétrécir :
+// pas cher à maintenir, et un coup hors de toute box est par construction
+// trop loin de toute pierre pour être un candidat valable. Restreindre le
+// scan à ces boxes transforme generateCandidates() d'un O(taille²) en
+// O(somme des aires), ce qui compte vu que ça tourne à chaque nœud.
 struct Box { int8_t minX, maxX, minY, maxY; };
-static Box searchBox;
+static std::vector<Box> searchBoxes;
+
+static bool overlaps(const Box &a, const Box &b) {
+	return a.minX <= b.maxX && b.minX <= a.maxX
+	    && a.minY <= b.maxY && b.minY <= a.maxY;
+}
 
 static void expandBox(Pos p) {
 	int8_t lo = 0, hi = (int8_t)current_board_size() - 1;
-	searchBox.minX = std::max(lo, (int8_t)std::min<int>(searchBox.minX, p.x - CANDIDATE_RADIUS));
-	searchBox.maxX = std::min(hi, (int8_t)std::max<int>(searchBox.maxX, p.x + CANDIDATE_RADIUS));
-	searchBox.minY = std::max(lo, (int8_t)std::min<int>(searchBox.minY, p.y - CANDIDATE_RADIUS));
-	searchBox.maxY = std::min(hi, (int8_t)std::max<int>(searchBox.maxY, p.y + CANDIDATE_RADIUS));
+	Box merged {
+		std::max(lo, (int8_t)(p.x - CANDIDATE_RADIUS)),
+		std::min(hi, (int8_t)(p.x + CANDIDATE_RADIUS)),
+		std::max(lo, (int8_t)(p.y - CANDIDATE_RADIUS)),
+		std::min(hi, (int8_t)(p.y + CANDIDATE_RADIUS)),
+	};
+
+	for (size_t i = 0; i < searchBoxes.size();) {
+		if (!overlaps(searchBoxes[i], merged)) {
+			i++;
+			continue;
+		}
+		merged.minX = std::min(merged.minX, searchBoxes[i].minX);
+		merged.maxX = std::max(merged.maxX, searchBoxes[i].maxX);
+		merged.minY = std::min(merged.minY, searchBoxes[i].minY);
+		merged.maxY = std::max(merged.maxY, searchBoxes[i].maxY);
+		searchBoxes.erase(searchBoxes.begin() + (long)i);
+	}
+	searchBoxes.push_back(merged);
 }
 
 // --- Score de motif ------------------------------------------------------
@@ -54,6 +78,7 @@ static constexpr int W_THREE      = 150;
 static constexpr int W_OPEN_TWO   = 40;
 static constexpr int W_TWO        = 10;
 static constexpr int W_CAPTURE    = 400;
+static constexpr int W_FORK       = 5000;
 
 static int patternWeight(int len, int openEnds) {
 	if (len >= 5)
@@ -65,6 +90,71 @@ static int patternWeight(int len, int openEnds) {
 	if (len == 2)
 		return openEnds == 2 ? W_OPEN_TWO : openEnds == 1 ? W_TWO : 0;
 	return 0;
+}
+
+// Cases vides consécutives à partir de `from` (inclus) en avançant selon
+// `dir`, plafonné à `cap` (inutile d'aller plus loin que ce qu'il faut pour
+// juger si un five tient encore dans la direction).
+static int emptyRun(Gomoku &state, Pos from, Pos dir, int cap) {
+	int n = 0;
+	Pos p = from;
+	while (n < cap && p.valid() && state.stone(p).empty()) {
+		n++;
+		p = p + dir;
+	}
+	return n;
+}
+
+// Un bout nominalement "ouvert" (case voisine vide) ne veut rien dire si la
+// place manque pour qu'un five y tienne un jour — ex: un three collé à un
+// bord avec une seule case libre de chaque côté. On ferme les deux bouts
+// dès que l'espace total (les deux côtés combinés, un five pouvant se
+// terminer de l'un ou l'autre) ne peut plus atteindre 5.
+static void gateBySpace(Gomoku &state, int len, Pos before, Pos after, Pos dir, bool &openBefore, bool &openAfter) {
+	if (len >= 5)
+		return;
+	int need = 5 - len;
+	int spaceBefore = openBefore ? emptyRun(state, before, dir * -1, need) : 0;
+	int spaceAfter = openAfter ? emptyRun(state, after, dir, need) : 0;
+	if (spaceBefore + spaceAfter < need) {
+		openBefore = false;
+		openAfter = false;
+	}
+}
+
+// Motif cassé : deux groupes séparés par un seul trou, l'ensemble tenant dans
+// une fenêtre de 5 cases. `XX.XX` est à un coup du five exactement comme un
+// four contigu, mais le comptage par run (runEnd ne suit que du contigu) n'y
+// voit que deux twos — quelques dizaines de points (40 à 80 selon que les
+// bouts extérieurs soient bloqués ou libres) là où un four en vaut 2000. Le
+// trou étant l'unique point de complétion, l'ensemble est classé comme un
+// four *fermé*, pas ouvert.
+//
+// Renvoie un bonus qui s'ajoute au score des runs, sans les remplacer, et
+// n'examine qu'une seule direction par appel. À l'appelant de ne pas
+// compter deux fois : evaluate() balaie tous les runs et n'appelle donc que
+// vers l'avant, localPatternScore n'examine que les runs passant par une
+// case et appelle des deux côtés.
+static int brokenBonus(Gomoku &state, Pos end, Pos dir, bool player, int len) {
+	const Pos gap = end + dir;
+	if (!gap.valid() || !state.stone(gap).empty())
+		return 0;
+
+	const Pos next = gap + dir;
+	if (!next.valid())
+		return 0;
+	const Stone beyond = state.stone(next);
+	if (beyond.empty() || beyond.player() != player)
+		return 0;
+
+	const int len2 = runLenOf(next, state.runEnd(next, dir, player), dir);
+
+	// Au-delà de 5 cases d'envergure, les deux groupes ne peuvent plus
+	// partager la même fenêtre de five : le trou ne les relie pas vraiment.
+	if (len + 1 + len2 > 5)
+		return 0;
+
+	return patternWeight(len + len2, 1);
 }
 
 // Score de la pierre en `pos` (déjà posée) pour `player`, sommé sur ses 4
@@ -80,7 +170,13 @@ static int localPatternScore(Gomoku &state, Pos pos, bool player) {
 		Pos after = end + dir;
 		bool openBefore = before.valid() && state.stone(before).empty();
 		bool openAfter = after.valid() && state.stone(after).empty();
+		gateBySpace(state, len, before, after, dir, openBefore, openAfter);
 		total += patternWeight(len, (openBefore ? 1 : 0) + (openAfter ? 1 : 0));
+		// Les deux sens ici, contrairement à evaluate() : on ne regarde que
+		// les runs passant par `pos`, donc personne d'autre ne viendra
+		// examiner un trou situé en amont du groupe.
+		total += brokenBonus(state, end, dir, player, len);
+		total += brokenBonus(state, start, dir * -1, player, len);
 	}
 	return total;
 }
@@ -103,8 +199,11 @@ static std::vector<Pos> generateCandidates(Gomoku &state, bool checkLegality) {
 	static std::vector<std::pair<int,Pos>> scored;
 	scored.clear();
 
-	for (int8_t y = searchBox.minY; y <= searchBox.maxY; y++) {
-	for (int8_t x = searchBox.minX; x <= searchBox.maxX; x++) {
+	// Les boxes sont disjointes par construction (expandBox fusionne tout
+	// chevauchement), donc pas de risque de scanner deux fois la même case.
+	for (const Box &box : searchBoxes) {
+	for (int8_t y = box.minY; y <= box.maxY; y++) {
+	for (int8_t x = box.minX; x <= box.maxX; x++) {
 		Pos pos{x, y};
 		if (!state.stone(pos).empty())
 			continue;
@@ -151,6 +250,7 @@ static std::vector<Pos> generateCandidates(Gomoku &state, bool checkLegality) {
 		scored.push_back({ownScore + (int)(BLOCK_FACTOR * oppScore), pos});
 	}
 	}
+	}
 
 	auto cut = scored.begin() + std::min(scored.size(), MAX_BRANCH);
 	std::partial_sort(scored.begin(), cut, scored.end(), [](auto &a, auto &b){ return a.first > b.first; });
@@ -164,16 +264,73 @@ static std::vector<Pos> generateCandidates(Gomoku &state, bool checkLegality) {
 
 // --- Heuristique -----------------------------------------------------------
 
+[[maybe_unused]] static bool openAt(Gomoku &state, Pos p) {
+	return p.valid() && state.stone(p).empty();
+}
+
+[[maybe_unused]] static bool stoneOf(Gomoku &state, Pos p, bool player) {
+	if (!p.valid())
+		return false;
+	Stone s = state.stone(p);
+	return !s.empty() && s.player() == player;
+}
+
+// Un alignement contient-il `target` (de `start` vers `end` selon `dir`) ?
+static bool lineContains(Pos start, Pos end, Pos dir, Pos target) {
+	for (Pos p = start; ; p = p + dir) {
+		if (p.x == target.x && p.y == target.y)
+			return true;
+		if (p.x == end.x && p.y == end.y)
+			return false;
+	}
+}
+
+// Part "dynamique" : sans elle, l'heuristique ne juge que le plateau final,
+// jamais l'enchaînement des coups qui y a mené. Un alignement qui vient
+// d'être touché par le dernier coup est une menace vivante, pas une forme
+// figée depuis dix tours — on le majore d'une fraction de son propre poids
+// (donc un four frais compte, un two frais quasi pas).
+//
+// Jamais validé en self-play : les matchs de tools/selfplay.py ont tourné
+// sur des binaires où cette part était absente. Ce qu'on sait vraiment, et
+// seulement d'une version antérieure à bonus fixe testée sur UNE position :
+// coût dans le bruit de mesure (~3% de nœuds) et aucun changement du coup
+// choisi. Conservé pour la complétude de l'heuristique, en connaissance de
+// cause — pas parce qu'un gain a été prouvé.
+static constexpr int RECENCY_DIVISOR = 8;
+
 // Parcourt chaque alignement une fois (compté depuis sa case de départ) et
 // le note par longueur + extrémités ouvertes. Assez rapide pour tourner à
 // chaque feuille : O(taille du plateau), sans récursion.
 static int evaluate(Gomoku &state) {
 	int score[2] = {0, 0};
+	int strongThreats[2] = {0, 0};
+	const Pos last = state.lastMove();
 
-	Gomoku::forall([&](Pos pos){
+	// Bornée aux search boxes plutôt qu'à Gomoku::forall (plateau entier) :
+	// toute pierre réelle y est forcément contenue (expandBox est appelé à
+	// chaque coup réellement joué), donc c'est strictement équivalent tout
+	// en évitant de sonder les cases vides loin de toute pierre à chaque
+	// feuille — la même optimisation que generateCandidates.
+	auto visit = [&](Pos pos){
 		Stone s = state.stone(pos);
-		if (s.empty())
+		if (s.empty()) {
+			bool hasNeighbor = false;
+			for (const Pos &d : SUBDIRECTIONS) {
+				Pos near = pos + d;
+				if (near.valid() && !state.stone(near).empty()) {
+					hasNeighbor = true;
+					break;
+				}
+			}
+			if (hasNeighbor && state.captureRule()) {
+				if (state.wouldCapture(pos, 0))
+					score[0] += W_CAPTURE * (2 * (int)state.score(0) + 1);
+				if (state.wouldCapture(pos, 1))
+					score[1] += W_CAPTURE * (2 * (int)state.score(1) + 1);
+			}
 			return;
+		}
 		bool player = s.player();
 
 		for (const Pos &dir : DIRECTIONS) {
@@ -185,11 +342,34 @@ static int evaluate(Gomoku &state) {
 			int len = runLenOf(pos, end, dir);
 			Pos before = pos - dir;
 			Pos after = end + dir;
+
 			bool openBefore = before.valid() && state.stone(before).empty();
 			bool openAfter = after.valid() && state.stone(after).empty();
-			score[player] += patternWeight(len, (openBefore ? 1 : 0) + (openAfter ? 1 : 0));
+			gateBySpace(state, len, before, after, dir, openBefore, openAfter);
+			int w = patternWeight(len, (openBefore ? 1 : 0) + (openAfter ? 1 : 0));
+			w += brokenBonus(state, end, dir, player, len);
+			if (w > 0 && last.valid() && lineContains(pos, end, dir, last))
+				w += w / RECENCY_DIVISOR;
+			score[player] += w;
+			if (w >= W_OPEN_THREE)
+				strongThreats[player]++;
 		}
-	});
+	};
+	for (const Box &box : searchBoxes)
+		for (int8_t y = box.minY; y <= box.maxY; y++)
+			for (int8_t x = box.minX; x <= box.maxX; x++)
+				visit(Pos{x, y});
+
+	// Fourche : deux menaces "three ouvert ou mieux" en même temps, dans des
+	// directions différentes, ne peuvent pas être bloquées par un seul coup
+	// adverse. Approximation volontaire (ne vérifie pas que les points de
+	// blocage sont réellement distincts) : suffisant pour valoriser la
+	// position sans repayer une détection combinatoire complète à chaque
+	// feuille — à affiner si des faux positifs se voient en pratique.
+	if (strongThreats[0] >= 2)
+		score[0] += W_FORK;
+	if (strongThreats[1] >= 2)
+		score[1] += W_FORK;
 
 	score[0] += W_CAPTURE * (int)(state.score(0) * state.score(0));
 	score[1] += W_CAPTURE * (int)(state.score(1) * state.score(1));
@@ -351,12 +531,15 @@ static std::pair<Pos,int> rootSearch(Gomoku &state, int depth) {
 static constexpr int MAX_DEPTH = 14;
 static constexpr auto TIME_BUDGET = std::chrono::milliseconds(460);
 // Le sujet exige *toujours* au moins 10 plis, pas "en moyenne". Les
-// profondeurs jusqu'à MIN_DEPTH ont un plafond large au lieu du budget
-// normal, pour qu'une position dense n'écourte jamais la recherche avant le
-// palier 10 ; au-delà, le vrai budget de 460ms s'applique. HARD_BUDGET est
-// un filet de sécurité contre une position pathologique, pas un objectif.
+// profondeurs jusqu'à MIN_DEPTH ont donc un plafond élargi (HARD_BUDGET) au
+// lieu du budget normal, pour qu'une position dense n'écourte pas la
+// recherche avant le palier 10 ; au-delà, le vrai budget de 460ms
+// s'applique. Ce n'est pas une garantie absolue : une position assez
+// pathologique peut encore être interrompue par HARD_BUDGET avant le palier
+// — celui-ci borne le pire cas plutôt que de laisser filer le temps de
+// réponse, arbitrage assumé pour rester proche des 500ms de moyenne visée.
 static constexpr int MIN_DEPTH = 10;
-static constexpr auto HARD_BUDGET = std::chrono::milliseconds(1500);
+static constexpr auto HARD_BUDGET = std::chrono::milliseconds(800);
 
 int main() {
 	std::string rules;
@@ -364,19 +547,33 @@ int main() {
 
 	Gomoku state(rules);
 
-	int8_t hi = (int8_t)current_board_size() - 1;
-	searchBox = {hi, 0, hi, 0};
+	searchBoxes.clear();
 
 	Pos move;
 	char c;
+	Outcome outcome{};
 	while (std::cin >> c && c == '|') {
 		std::cin >> move;
 		std::cout << move;
-		state.applyMove(move);
+		outcome = state.applyMove(move);
 		expandBox(move);
 	}
 
 	std::cerr << state << std::endl;
+
+	// État de la partie après rejeu de l'historique. Le moteur le calculait
+	// déjà sans jamais l'exposer ; l'imprimer permet à un pilote externe
+	// (tools/selfplay.py) de savoir quand la partie est finie, sans
+	// réimplémenter les règles de son côté.
+	if (outcome.state == Result::Win)
+		std::cerr << "Result: win " << (int)outcome.winner << std::endl;
+	else if (outcome.state == Result::Draw)
+		std::cerr << "Result: draw" << std::endl;
+	else
+		std::cerr << "Result: ongoing" << std::endl;
+
+	if (outcome.state != Result::Ongoing)
+		return 0;
 
 	auto start = std::chrono::steady_clock::now();
 	deadline = start + TIME_BUDGET;
