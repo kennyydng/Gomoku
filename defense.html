@@ -394,10 +394,10 @@
       <h1>Comprendre le moteur, pas juste le réciter</h1>
       <p class="dek">Ce carnet suit le code réel du bot, dans l'ordre où on l'expliquerait à quelqu'un qui ne connaît ni minimax ni le sujet. Chaque chapitre part d'une question du sujet, montre le code qui y répond, et explique pourquoi il est écrit comme ça.</p>
       <div class="stat-strip">
-        <div class="stat"><div class="v">≥ 10</div><div class="k">plis garantis</div></div>
+        <div class="stat"><div class="v">≥ 10</div><div class="k">plis visés</div></div>
         <div class="stat"><div class="v">460 ms</div><div class="k">budget normal</div></div>
-        <div class="stat"><div class="v">1500 ms</div><div class="k">plafond jusqu'au pli 10</div></div>
-        <div class="stat"><div class="v">6</div><div class="k">coups par nœud</div></div>
+        <div class="stat"><div class="v">800 ms</div><div class="k">plafond jusqu'au pli 10</div></div>
+        <div class="stat"><div class="v">5</div><div class="k">coups par nœud</div></div>
         <div class="stat"><div class="v">2²¹</div><div class="k">entrées de la table</div></div>
       </div>
     </div>
@@ -419,7 +419,7 @@
 const result = execSync("./Gomoku", { cwd: BOT_CWD, input: state, timeout: 500000 }).toString()</pre>
       </div>
 
-      <p>Le protocole tient en deux lignes : une chaîne de <strong>9 caractères</strong> décrivant les règles actives, puis la liste des coups déjà joués sous la forme <span class="mono">|x:y|x:y...</span>. Le bot répond avec son propre coup au même format. Le serveur ne recompile le C++ que si les sources ont changé (comparaison de timestamps) — recompiler à chaque coup aurait faussé le temps de réponse mesuré.</p>
+      <p>Le protocole tient en deux lignes : une chaîne de <strong>6 caractères</strong> décrivant les règles actives (voir chapitre 1), puis la liste des coups déjà joués sous la forme <span class="mono">|x:y|x:y...</span>. Le bot répond avec son propre coup au même format. Le serveur ne recompile le C++ que si les sources ont changé (comparaison de timestamps) — recompiler à chaque coup aurait faussé le temps de réponse mesuré.</p>
 
       <div class="callout">
         <span class="callout-label">Point de soutenance</span>
@@ -545,7 +545,7 @@ if (stones[!player][pos0] &amp;&amp; stones[!player][pos1] &amp;&amp; stones[pla
       <p>Le <span class="mono">cap_mask</span> (16 bits, 8 utilisés) est calculé une fois par coup pour éviter de tester les directions qui sortiraient du plateau, puis affiné direction par direction : chaque bit qui a effectivement capturé reste à 1. Ce masque exact est stocké dans l'historique du coup (<span class="mono">Move::captures</span>) — <span class="mono">undo()</span> n'a donc pas besoin de recalculer quoi que ce soit, il relit simplement quelles directions ont capturé et restaure les pierres correspondantes.</p>
 
       <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Victoire par capture (10 pierres)</h3>
-      <p>Vérifiée en une ligne dans <span class="mono">applyMove()</span> : <span class="mono">captures[mover] &gt;= 10</span>. Le cas des deux joueurs atteignant 10 en même temps (auto-capture) est traité comme match nul plutôt que de choisir arbitrairement un gagnant.</p>
+      <p>Vérifiée en une ligne dans <span class="mono">applyMove()</span> : <span class="mono">captures[mover] &gt;= 10</span>, testée avant toute autre condition de fin de partie. Il n'y a pas de traitement du cas « les deux joueurs à 10 en même temps » : seul le joueur qui vient de jouer voit son compteur bouger (<span class="mono">play()</span> ne crédite que lui), et ce test étant le tout premier, atteindre 10 termine la partie sur le coup même. L'adversaire ne peut donc jamais être trouvé à 10 en début de tour — les branches correspondantes étaient du code mort et ont été supprimées.</p>
 
       <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Capture de fin de partie — le five "imparfait"</h3>
       <div class="quote-subject">
@@ -608,20 +608,45 @@ if (winning || (rules.capture &amp;&amp; wouldCapture(pos, player)))
       <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">evaluate() — la fonction de feuille</h3>
       <div class="code-wrap">
         <span class="code-label">main.cpp — evaluate()</span>
-        <pre class="code">Gomoku::forall([&amp;](Pos pos){
-    <span class="c">// ... pour chaque pierre qui est le DÉBUT de son alignement ...</span>
-    score[player] += patternWeight(len, extrémités ouvertes);
-});
+        <pre class="code"><span class="c">// Balayage borné aux search boxes, pas au plateau entier</span>
+for (const Box &amp;box : searchBoxes) for (chaque case de la box) {
+
+    <span class="c">// Pierre qui est le DÉBUT de son alignement</span>
+    <span class="c">// Paire capturable = alignement de longueur 2, un flanc vide, l'autre adverse</span>
+    if (len == 2 &amp;&amp; flancs menaçants) score[adverse] += W_CAPTURE * (2*captures + 1);
+
+    gateBySpace(...);            <span class="c">// un bout "ouvert" sans place pour un five est fermé</span>
+    w  = patternWeight(len, extrémités ouvertes);
+    w += brokenBonus(...);       <span class="c">// XX.XX vaut un four, pas deux twos</span>
+    if (alignement touché par le dernier coup) w += w / 8;
+    score[player] += w;
+    if (w &gt;= W_OPEN_THREE) strongThreats[player]++;
+}
+
+if (strongThreats[p] &gt;= 2) score[p] += W_FORK;   <span class="c">// fourche</span>
 score[0] += W_CAPTURE * captures(0)²;
 score[1] += W_CAPTURE * captures(1)²;
 
 return score[toMove] - score[!toMove];   <span class="c">// convention négamax</span></pre>
       </div>
-      <p>Deux détails qui comptent :</p>
+      <p>Chaque terme répond à un critère de la grille :</p>
       <ul>
         <li><strong>Compter chaque alignement une seule fois.</strong> On ne compte un alignement que depuis sa première pierre (<span class="mono">prev</span> n'est pas la même couleur), sinon un alignement de 4 pierres serait compté 4 fois.</li>
+        <li><strong>Assez de place pour un five ?</strong> <span class="mono">gateBySpace()</span> : une extrémité vide ne compte comme "ouverte" que si l'espace restant, les deux côtés combinés, permet encore d'atteindre 5. Un motif étouffé contre un bord ne vaut pas un motif libre.</li>
+        <li><strong>Motifs cassés.</strong> <span class="mono">brokenBonus()</span> : deux groupes séparés par un seul trou et tenant dans une fenêtre de 5 (<span class="mono">XX.XX</span>) sont à un coup du five, exactement comme un four contigu — alors que le comptage par run n'y voit que deux twos. Classé comme four <em>fermé</em>, le trou étant l'unique point de complétion.</li>
+        <li><strong>Captures potentielles.</strong> Une capture possible est valorisée avant même d'être jouée, avec le même poids marginal que le bonus quadratique (<span class="mono">2·captures + 1</span>, sa dérivée) : menacer la 5<sup>e</sup> paire pèse bien plus que la 1<sup>re</sup>. La détection part de la <em>paire menacée</em>, pas de la case d'où on capturerait : la règle étant <span class="mono">VIDE,C,C,!C</span>, une paire capturable est forcément un alignement de longueur exactement 2 avec un flanc vide et l'autre tenu par l'adversaire — donc lisible sur les alignements qu'on parcourt déjà (voir l'encadré ci-dessous).</li>
         <li><strong>Bonus de capture quadratique.</strong> <span class="mono">captures²</span> plutôt que <span class="mono">captures</span> : passer de 2 à 4 captures compte peu, mais passer de 8 à 10 (qui gagne la partie) doit peser énormément plus. Le carré fait croître l'urgence en même temps qu'on se rapproche de la victoire par capture, sans avoir besoin d'un cas spécial.</li>
+        <li><strong>Fourche.</strong> Deux menaces "three ouvert ou mieux" simultanées ne peuvent pas être bloquées d'un seul coup. Approximation assumée : on ne vérifie pas que les points de blocage sont réellement distincts.</li>
+        <li><strong>Part dynamique.</strong> Un alignement touché par le dernier coup est majoré d'une fraction de son propre poids : une menace vivante compte plus qu'une forme figée depuis dix tours. C'est le seul terme qui dépend de l'enchaînement des coups et pas seulement du plateau final.</li>
       </ul>
+      <div class="callout">
+        <span class="callout-label">Optimisation : changer de point de vue, pas de constante</span>
+        La détection des captures potentielles sondait initialement <em>chaque case vide</em> de la zone avec <span class="mono">wouldCapture()</span>, deux fois (une par joueur), chaque appel balayant 8 directions — à chaque feuille. C'était le poste le plus cher de l'heuristique. La reformulation ne change pas l'information calculée (l'ensemble des opportunités détectées est rigoureusement identique), seulement la question posée : « quelles paires sont capturables ? » se lit sur les alignements déjà parcourus, alors que « d'où pourrais-je capturer ? » impose de tester toutes les cases vides. Résultat mesuré : <strong>+79% de nœuds explorés</strong> à budget constant, et le temps de réponse moyen sur les 20 premiers plis passe de <strong>655ms à 488ms</strong> — ce qui fait repasser le projet sous la demi-seconde exigée. Vérifié neutre en force de jeu sur 48 parties de self-play (45,8%, soit 0,58 écart-type de la parité).
+      </div>
+      <div class="callout">
+        <span class="callout-label">Honnêteté sur les mesures</span>
+        Ces termes ont été validés en self-play (<span class="mono">tools/selfplay.py</span>, deux binaires qui s'affrontent sur N parties, ouvertures appariées couleurs inversées) : <strong>50% de score dans les deux campagnes</strong> (6V-6D sur 12 parties pour les trois premiers ajouts, 8V-8D sur 16 parties pour les motifs cassés). Autrement dit, la connaissance gagnée et la profondeur perdue pour la payer s'annulent à peu près. Ils sont conservés pour la complétude de l'heuristique, pas parce qu'un gain de force a été démontré — et l'échantillon (±13 points d'écart-type) n'exclut pas un petit effet dans un sens ou l'autre.
+      </div>
       <p>Le score final est toujours <em>du point de vue du joueur qui doit jouer</em> (<span class="mono">score[toMove] - score[!toMove]</span>) — c'est la convention négamax, expliquée au chapitre suivant.</p>
 
       <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Le même calcul, recyclé pour trier les coups</h3>
@@ -643,7 +668,7 @@ return score[toMove] - score[!toMove];   <span class="c">// convention négamax<
       <p>Le signe moins dit : "le score de mon adversaire, c'est l'opposé du mien". La fenêtre <span class="mono">[alpha, beta]</span> est aussi inversée et permutée en <span class="mono">[-beta, -alpha]</span> — c'est la même bascule de perspective appliquée aux bornes de l'élagage.</p>
 
       <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">L'élagage alpha-bêta</h3>
-      <p>Explorer tout l'arbre serait beaucoup trop lent (branchement 6, profondeur 10 → 6¹⁰ ≈ 60 milliards de nœuds). Alpha-bêta permet de couper des branches entières <strong>sans changer le résultat</strong> : dès qu'on prouve qu'un coup est "assez mauvais" pour que l'adversaire ne le laisse jamais arriver, plus la peine de l'explorer en détail.</p>
+      <p>Explorer tout l'arbre serait beaucoup trop lent (branchement 5, profondeur 10 → 5¹⁰ ≈ 10 millions de nœuds, et bien plus sans la coupe des candidats). Alpha-bêta permet de couper des branches entières <strong>sans changer le résultat</strong> : dès qu'on prouve qu'un coup est "assez mauvais" pour que l'adversaire ne le laisse jamais arriver, plus la peine de l'explorer en détail.</p>
       <ul>
         <li><span class="mono">alpha</span> — le meilleur score que <strong>je</strong> peux déjà garantir sur cette branche.</li>
         <li><span class="mono">beta</span> — le meilleur score que <strong>l'adversaire</strong> peut déjà garantir plus haut dans l'arbre.</li>
@@ -685,6 +710,20 @@ return score[toMove] - score[!toMove];   <span class="c">// convention négamax<
         <div class="diagram-caption">A a déjà garanti +7 (le mieux entre +3 et +7). B trouve d'abord +2 : puisque la racine choisira le pire des deux nœuds pour l'adversaire (ici, dans une vraie alternance min/max), dès que le score courant de B ne peut plus dépasser ce que A garantit déjà, la dernière branche de B (« ? ») n'a plus besoin d'être regardée en détail — quel que soit son score, il ne changera pas le choix final.</div>
       </div>
 
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">PVS / negascout — la fenêtre nulle</h3>
+      <p>Alpha-bêta seul traite tous les coups d'un nœud de la même façon. Or le tri des candidats (chapitre 6) et le coup mémorisé dans la table de transposition placent en tête celui qui est <em>probablement</em> le meilleur — les suivants ne servent le plus souvent qu'à confirmer qu'ils sont moins bons. PVS exploite ça : le premier coup est cherché à fenêtre complète, les autres avec une <strong>fenêtre nulle</strong>, beaucoup moins chère, qui répond juste "oui ou non, est-ce mieux qu'alpha ?".</p>
+      <div class="code-wrap">
+        <span class="code-label">main.cpp — negamax()</span>
+        <pre class="code">if (first) {
+    v = -negamax(state, depth - 1, -beta, -alpha);        <span class="c">// fenêtre complète</span>
+} else {
+    v = -negamax(state, depth - 1, -alpha - 1, -alpha);   <span class="c">// fenêtre nulle</span>
+    if (v &gt; alpha &amp;&amp; v &lt; beta)                             <span class="c">// hypothèse fausse :</span>
+        v = -negamax(state, depth - 1, -beta, -alpha);    <span class="c">// on re-cherche vraiment</span>
+}</pre>
+      </div>
+      <p>Le pari : la re-recherche à fenêtre complète, qui coûte double, reste rare parce que l'ordre des coups est bon. Mesuré sur une position de milieu de partie à budget constant (460 ms) : <strong>profondeur 11 → 12</strong>. C'est un gain gratuit en qualité — même évaluation, simplement explorée plus loin — contrairement aux enrichissements de l'heuristique, qui eux se paient en profondeur perdue (chapitre 4).</p>
+
       <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Le score de victoire dépend de la profondeur</h3>
       <div class="code-wrap">
         <span class="code-label">main.cpp</span>
@@ -706,9 +745,9 @@ return score[toMove] - score[!toMove];   <span class="c">// convention négamax<
       <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Générer des coups : pas les 361 cases</h3>
       <p>Explorer les 361 cases à chaque nœud serait absurde — la quasi-totalité du plateau est loin de toute pierre et n'a aucun intérêt tactique. <span class="mono">generateCandidates()</span> applique trois filtres en cascade :</p>
       <ol>
-        <li><strong>Boîte englobante</strong> — ne scanner que la zone qui a déjà vu des pierres (+1 case de marge), pas le plateau entier.</li>
+        <li><strong>Boîtes englobantes</strong> — ne scanner que les zones qui ont déjà vu des pierres (+1 case de marge), pas le plateau entier. Plusieurs rectangles disjoints plutôt qu'un seul : avec une boîte unique, deux échanges dans des coins opposés forceraient à scanner tout le vide entre les deux. Ils fusionnent dès qu'ils se recouvrent (<span class="mono">expandBox</span>).</li>
         <li><strong>Voisinage</strong> — la case doit toucher une pierre existante (les 8 <span class="mono">SUBDIRECTIONS</span>).</li>
-        <li><strong>Score et coupe à 6</strong> — chaque candidat reçoit un score cheap (<span class="mono">localPatternScore</span> pour soi + 0.8× pour ce que ça bloque chez l'adversaire), et seuls les <span class="mono">MAX_BRANCH = 6</span> meilleurs sont gardés.</li>
+        <li><strong>Score et coupe à 5</strong> — chaque candidat reçoit un score cheap (<span class="mono">localPatternScore</span> pour soi + 0.8× pour ce que ça bloque chez l'adversaire), et seuls les <span class="mono">MAX_BRANCH = 5</span> meilleurs sont gardés. C'est le filtre le plus décisif du moteur : un coup absent de ce top-5 n'est <em>jamais</em> exploré, quelle que soit la qualité de l'évaluation en profondeur.</li>
       </ol>
       <p>La légalité complète (<span class="mono">isLegalMove</span>, coûteuse car récursive) n'est vérifiée <strong>qu'à la racine</strong>. À l'intérieur de l'arbre, on explore des coups géométriquement plausibles sans revalider le double-trois à chaque nœud — seule la détection de victoire (toujours exacte) coupe réellement l'arbre. Compromis assumé : le coup <em>réellement joué</em> est toujours garanti légal ; une branche hypothétique profonde peut, dans de rares cas, explorer un coup qui aurait été interdit s'il avait été proposé pour de vrai.</p>
 
@@ -753,13 +792,13 @@ return score[toMove] - score[!toMove];   <span class="c">// convention négamax<
       <div class="code-wrap">
         <span class="code-label">main.cpp</span>
         <pre class="code">deadline = start + (depth &lt;= MIN_DEPTH ? HARD_BUDGET : TIME_BUDGET);
-<span class="c">// MIN_DEPTH = 10, HARD_BUDGET = 1500ms, TIME_BUDGET = 460ms</span></pre>
+<span class="c">// MIN_DEPTH = 10, HARD_BUDGET = 800ms, TIME_BUDGET = 460ms</span></pre>
       </div>
       <ul>
-        <li>Pour atteindre les profondeurs 1 à 10, le bot dispose d'un plafond large (1500ms) — largement suffisant en pratique, mais qui empêche une position pathologique de couper la recherche avant le pli 10 exigé.</li>
+        <li>Pour atteindre les profondeurs 1 à 10, le bot dispose d'un plafond élargi (800ms) — qui évite qu'une position dense ne coupe la recherche avant le pli 10 exigé, sans laisser filer le temps de réponse loin de la demi-seconde visée.</li>
         <li>Au-delà du pli 10, c'est le vrai budget (460ms, sous les 500ms imposés) qui s'applique — chercher plus loin est un bonus de qualité, pas une obligation.</li>
       </ul>
-      <p>Pour que le plafond de 1500ms reste rarement sollicité, <span class="mono">MAX_BRANCH</span> a été réduit de 8 à 6 : moins de branches à explorer par nœud, donc le pli 10 est atteint bien avant le plafond dans l'immense majorité des positions (mesuré : ~460-660ms sur les positions les plus difficiles testées, largement sous 1500ms).</p>
+      <p>Pour que ce plafond reste rarement sollicité, <span class="mono">MAX_BRANCH</span> a été réduit de 8 à 6 puis à 5 : moins de branches par nœud, donc le pli 10 est atteint avant le plafond dans l'immense majorité des positions.</p><div class="callout"><span class="callout-label">Marge réelle</span>Le plafond était initialement à 1500ms ; il a été ramené à <strong>800ms</strong> pour ne pas s'éloigner de la moyenne de 500ms exigée. La contrepartie est une marge devenue mince : sur les positions mesurées, le temps de réponse va de 460ms (cas normal, budget atteint) jusqu'à <strong>~690ms</strong> en milieu de partie dense — soit une centaine de millisecondes sous le plafond. Un enrichissement supplémentaire de l'heuristique consommerait cette marge : c'est la contrainte à surveiller avant d'ajouter quoi que ce soit à <span class="mono">evaluate()</span>.</div>
 
       <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Le timer affiché à l'écran</h3>
       <p>Exigence non négociable du sujet ("no timer, no project validation"). Le temps est mesuré côté serveur (<span class="mono">route.ts</span>, autour de l'appel au binaire), transmis au frontend, et affiché en direct dans l'interface pendant que le bot réfléchit.</p>
