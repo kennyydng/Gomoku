@@ -1,0 +1,6 @@
+logs/
+bot/obj/
+bot/bin/
+bot/Gomoku
+bot/standard
+bot/make/*.list

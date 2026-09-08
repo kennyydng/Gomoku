@@ -1,16 +1,22 @@
-FROM node:20-trixie-slim
+FROM archlinux:base-20260830.0.582275
+
 USER root
-RUN apt-get update \
-	&& apt-get install -y --no-install-recommends \
-		build-essential \
-		make \
-		gcc \
-		valgrind \
-		ca-certificates \
-	&& rm -rf /var/lib/apt/lists/*
+RUN pacman -Sy
+RUN pacman -Sy --noconfirm npm gcc rsync
+ENV ITER=1 
+RUN pacman -Sy --noconfirm valgrind debuginfod
+ENV DEBUGINFOD_URLS="https://debuginfod.archlinux.org"
 WORKDIR /var/www/app
 COPY app/package.json app/package-lock.json ./
 RUN npm ci
 COPY bot ./bot
-RUN --mount=type=cache,target=./bot/obj/ make -C bot
+WORKDIR bot/
+# Le binaire que l'API web lance réellement (bot/Gomoku). `make` produisait un
+# binaire par combinaison de règles, héritage de l'époque où elles étaient
+# figées à la compilation ; elles sont désormais lues sur stdin, donc un seul
+# binaire suffit — et le compiler ici évite de payer la compilation à la
+# première requête.
+RUN sh build.sh
+WORKDIR ../
 COPY app ./
+COPY docker-entrypoint.sh /var/

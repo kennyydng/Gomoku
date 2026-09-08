@@ -1,19 +1,17 @@
 
-#ifndef __UTILS_HPP__
-# define __UTILS_HPP__
+#pragma once
 
-# include <cstring>
-# include <iostream>
+#include <cstring>
+#include <iostream>
 
 template<size_t N>
 class Expect {
 	char _expected[N];
 public:
-	Expect(const char (&expected)[N+1]) {
+	constexpr Expect(const char (&expected)[N+1]) {
 			for (size_t i = 0; i < N; i++)
 				_expected[i] = expected[i];
 		};
-	~Expect() {};
 
 	friend std::istream &operator>>(std::istream &is, const Expect &e) {
 			char actual[N];
@@ -29,5 +27,3 @@ public:
 
 template<size_t N>
 Expect(const char (&expected)[N]) -> Expect<N-1>;
-
-#endif

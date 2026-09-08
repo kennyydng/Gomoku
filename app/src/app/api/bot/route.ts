@@ -7,7 +7,16 @@ import type { Gomoku, Rules, Position } from '../../game/Gomoku'
 
 const BOT_CWD = 'bot'
 const BOT_BINARY = 'Gomoku'
-const BOT_SOURCES = ['src/main.cpp', 'src/Gomoku.cpp', 'inc/Gomoku.class.hpp', 'inc/utils.hpp']
+const BOT_SOURCES = [
+  'src/main.cpp', 'src/Gomoku.cpp',
+  'inc/Gomoku.class.hpp', 'inc/engine_state.hpp', 'inc/search.hpp',
+  'inc/vcf.hpp', 'inc/BitBoard.class.hpp', 'inc/gomoku_types.hpp',
+]
+
+// La commande de compilation vit dans bot/build.sh, que le Dockerfile appelle
+// aussi : deux copies des drapeaux (C++26, réflexion, AVX2) divergeraient, et
+// la divergence ne se verrait qu'au moment où l'image ne compile plus.
+const BOT_BUILD = 'sh build.sh'
 
 function botNeedsRebuild(): boolean {
   const binaryPath = join(BOT_CWD, BOT_BINARY)
@@ -51,7 +60,7 @@ export async function POST(request: Request) {
 
   if (botNeedsRebuild()) {
     console.log("(Re)Compiling");
-    execSync("g++ -std=c++23 -O2 -Wall -Wextra -Werror -pedantic -I inc src/main.cpp src/Gomoku.cpp -o Gomoku", {cwd: BOT_CWD});
+    execSync(BOT_BUILD, {cwd: BOT_CWD});
   }
 
   console.log("Asking bot for move...");

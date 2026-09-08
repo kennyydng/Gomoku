@@ -373,519 +373,581 @@
       <span class="label">Gomoku — soutenance</span>
     </div>
     <nav id="toc">
-      <a class="toc-link" href="#ch0"><span class="toc-num">0</span>Architecture</a>
-      <a class="toc-link" href="#ch1"><span class="toc-num">1</span>Le plateau</a>
-      <a class="toc-link" href="#ch2"><span class="toc-num">2</span>Détection des menaces</a>
-      <a class="toc-link" href="#ch3"><span class="toc-num">3</span>Règles du jeu</a>
-      <a class="toc-link" href="#ch4"><span class="toc-num">4</span>L'heuristique</a>
-      <a class="toc-link" href="#ch5"><span class="toc-num">5</span>Minimax &amp; négamax</a>
-      <a class="toc-link" href="#ch6"><span class="toc-num">6</span>La recherche en pratique</a>
-      <a class="toc-link" href="#ch7"><span class="toc-num">7</span>Profondeur &amp; budget</a>
-      <a class="toc-link" href="#ch8"><span class="toc-num">8</span>Questions probables</a>
+      <a class="toc-link" href="#ch0"><span class="toc-num">0</span>Deux moteurs</a>
+      <a class="toc-link" href="#ch1"><span class="toc-num">1</span>Le plateau en bits</a>
+      <a class="toc-link" href="#ch2"><span class="toc-num">2</span>Compter des fenêtres</a>
+      <a class="toc-link" href="#ch3"><span class="toc-num">3</span>Le score incrémental</a>
+      <a class="toc-link" href="#ch4"><span class="toc-num">4</span>Ce que les fenêtres taisent</a>
+      <a class="toc-link" href="#ch5"><span class="toc-num">5</span>La recherche</a>
+      <a class="toc-link" href="#ch6"><span class="toc-num">6</span>Candidats &amp; tri</a>
+      <a class="toc-link" href="#ch7"><span class="toc-num">7</span>Le VCF</a>
+      <a class="toc-link" href="#ch8"><span class="toc-num">8</span>Les règles</a>
+      <a class="toc-link" href="#ch9"><span class="toc-num">9</span>Mesurer</a>
+      <a class="toc-link" href="#ch10"><span class="toc-num">10</span>Questions probables</a>
     </nav>
     <div class="sidebar-foot">
-      Basé sur le code réel de <span class="mono">bot/</span> (main.cpp, Gomoku.cpp, Gomoku.class.hpp). Chaque section renvoie aux fonctions à connaître par cœur pour la soutenance.
+      Décrit la branche <span class="mono">merge-search</span> : le moteur bitboard de njaber, branché sur une recherche portée depuis <span class="mono">main</span>. Chaque chiffre a été mesuré sur cette machine (Intel i7-12700, GCC 16.2.1, natif), pas estimé.
     </div>
   </aside>
 
   <main>
     <div class="masthead">
       <p class="eyebrow">Préparation soutenance · Gomoku 42</p>
-      <h1>Comprendre le moteur, pas juste le réciter</h1>
-      <p class="dek">Ce carnet suit le code réel du bot, dans l'ordre où on l'expliquerait à quelqu'un qui ne connaît ni minimax ni le sujet. Chaque chapitre part d'une question du sujet, montre le code qui y répond, et explique pourquoi il est écrit comme ça.</p>
+      <h1>Un plateau qui tient dans sept entiers</h1>
+      <p class="dek">Ce carnet suit le code réel du bot, dans l'ordre où on l'expliquerait à quelqu'un qui ne connaît ni minimax ni le sujet. Chaque chapitre part d'une question, montre le code qui y répond, et dit ce qui a été <em>mesuré</em> — y compris quand la mesure a contredit l'intuition, ce qui est arrivé plus d'une fois.</p>
       <div class="stat-strip">
-        <div class="stat"><div class="v">≥ 10</div><div class="k">plis visés</div></div>
-        <div class="stat"><div class="v">460 ms</div><div class="k">budget normal</div></div>
-        <div class="stat"><div class="v">800 ms</div><div class="k">plafond jusqu'au pli 10</div></div>
-        <div class="stat"><div class="v">5</div><div class="k">coups par nœud</div></div>
-        <div class="stat"><div class="v">2²¹</div><div class="k">entrées de la table</div></div>
+        <div class="stat"><div class="v">64 o</div><div class="k">un plateau complet</div></div>
+        <div class="stat"><div class="v">1 020</div><div class="k">fenêtres de cinq</div></div>
+        <div class="stat"><div class="v">460 ms</div><div class="k">budget par coup</div></div>
+        <div class="stat"><div class="v">≥ 10</div><div class="k">plis garantis</div></div>
+        <div class="stat"><div class="v">119</div><div class="k">vérifications</div></div>
       </div>
     </div>
 
     <!-- ===================== CHAPITRE 0 ===================== -->
     <section class="chapter" id="ch0">
-      <div class="chapter-head"><span class="chapter-num">0</span><h2>Architecture générale</h2></div>
+      <div class="chapter-head"><span class="chapter-num">0</span><h2>Deux moteurs, un protocole</h2></div>
 
-      <p>Le projet a deux moteurs séparés, et c'est une décision assumée, pas un oubli :</p>
+      <p>Le projet a deux implémentations des règles, et c'est assumé :</p>
       <ul>
-        <li><strong>Frontend (Next.js/TypeScript)</strong> — <span class="mono">app/src/app/game/Gomoku.ts</span>. Gère l'affichage, valide les coups humains, calcule les cases interdites pour l'aide visuelle.</li>
-        <li><strong>Bot (C++, autonome)</strong> — <span class="mono">bot/</span>. Un exécutable qui ne connaît rien au web : il lit l'état de la partie sur <span class="mono">stdin</span>, réfléchit, écrit un coup sur <span class="mono">stdout</span>.</li>
+        <li><strong>Frontend (Next.js / TypeScript)</strong> — <span class="mono">app/src/app/game/Gomoku.ts</span>. Affiche, valide le coup humain, calcule les cases interdites pour l'aide visuelle.</li>
+        <li><strong>Bot (C++, autonome)</strong> — <span class="mono">bot/</span>. Un exécutable qui ne connaît rien au web : il lit l'état sur <span class="mono">stdin</span>, réfléchit, écrit un coup sur <span class="mono">stdout</span>.</li>
       </ul>
-      <p>Les deux réimplémentent les mêmes règles indépendamment. Ce n'est pas de la duplication paresseuse : le bot a besoin d'une représentation ultra-compacte (bitboards) pour explorer des centaines de milliers de positions par coup, alors que le frontend a besoin d'une représentation confortable à manipuler en JS. Partager le même moteur aurait sacrifié l'un des deux besoins.</p>
+      <p>Ce n'est pas de la duplication paresseuse. Le bot doit explorer des dizaines de milliers de positions par coup et a besoin d'une représentation compacte ; le frontend doit valider <em>un</em> coup et a besoin d'une structure confortable en JS. Partager le même moteur aurait sacrifié l'un des deux besoins.</p>
 
       <div class="code-wrap">
-        <span class="code-label">app/src/app/api/bot/route.ts</span>
-        <pre class="code">const state = `${gridToken}${rulesPayload}\n${moves.map(([x,y]) => `|${x}:${y}`).join('')}`
-const result = execSync("./Gomoku", { cwd: BOT_CWD, input: state, timeout: 500000 }).toString()</pre>
+        <span class="code-label">le protocole, vu de l'appelant</span>
+        <pre class="code">911110          <span class="c">← six caractères de règles</span>
+|9:9|9:10|10:8  <span class="c">← l'historique complet, un coup par `|x:y`</span>
+                <span class="c">→ le bot répond l'historique rejoué puis son coup</span></pre>
       </div>
 
-      <p>Le protocole tient en deux lignes : une chaîne de <strong>6 caractères</strong> décrivant les règles actives (voir chapitre 1), puis la liste des coups déjà joués sous la forme <span class="mono">|x:y|x:y...</span>. Le bot répond avec son propre coup au même format. Le serveur ne recompile le C++ que si les sources ont changé (comparaison de timestamps) — recompiler à chaque coup aurait faussé le temps de réponse mesuré.</p>
+      <p>Le bot est <strong>sans état</strong> : un process par coup, l'historique complet à chaque fois. C'est plus lent en apparence, mais ça supprime toute une classe de bugs — désynchronisation entre l'affichage et le moteur — et ça rend le bot testable au tuyau, ce dont tout le chapitre 9 dépend.</p>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Pourquoi ce moteur exige GCC 16</h3>
+      <p>La représentation utilise la <strong>réflexion statique C++26</strong> — <span class="mono">template for</span> sur les axes, splicers, <span class="mono">std::meta</span>. Ce n'est pas de la coquetterie : les quatre axes du plateau sont quatre <em>types</em> différents, et <span class="mono">template for</span> écrit la boucle une fois en générant du code spécialisé pour chacun.</p>
+      <p>La commande de compilation vit dans <span class="mono">bot/build.sh</span>, appelée par le Dockerfile <em>et</em> par l'API web. Deux copies des drapeaux auraient divergé, et la divergence ne se serait vue qu'au moment où l'image ne compile plus.</p>
 
       <div class="callout">
         <span class="callout-label">Point de soutenance</span>
-        Si on te demande "pourquoi deux implémentations ?", la réponse est : contrainte de performance. Le sujet impose 10 plis de recherche en 500ms ; ça n'est atteignable qu'avec une structure de données compacte (bitboards) et un langage compilé. Le frontend, lui, n'a besoin de valider qu'un seul coup humain à la fois.
+        Si on te demande « pourquoi un compilateur exotique ? », la réponse honnête est : la représentation l'exige, et le prix est réel — le bot ne compile pas avec un GCC de distribution ancien. C'est pour ça que la <em>recherche</em>, elle, est écrite contre un concept et se compile en C++23 standard (chapitre 5) : la partie algorithmique reste vérifiable partout.
       </div>
     </section>
 
     <!-- ===================== CHAPITRE 1 ===================== -->
     <section class="chapter" id="ch1">
-      <div class="chapter-head"><span class="chapter-num">1</span><h2>Représenter le plateau</h2></div>
+      <div class="chapter-head"><span class="chapter-num">1</span><h2>Le plateau en bits</h2></div>
 
-      <p>Trois briques, du plus petit au plus grand.</p>
+      <p>Un plateau 19×19 a 361 cases. Une case est vide, noire ou blanche — deux bits suffiraient, mais on fait mieux : <strong>un plateau par joueur</strong>, un bit par case.</p>
 
-      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Pos — une case</h3>
-      <p>Une position est deux <span class="mono">int8_t</span> (x, y). Rien de plus — pas de classe lourde, juste assez pour tenir dans un registre CPU et être copié sans coût.</p>
-
-      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Stone — une pierre sur 2 bits</h3>
       <div class="code-wrap">
-        <span class="code-label">Gomoku.class.hpp</span>
-        <pre class="code">enum type : uint8_t {
-    NONE  = 0b00, ERROR = 0b11,
-    BLACK = 0b01, WHITE = 0b10
-};</pre>
+        <span class="code-label">bot/inc/Gomoku.class.hpp — l'état d'un joueur</span>
+        <pre class="code">struct PlayerInfo {
+    BitBoard&lt;0&gt; stones = {};
+    std::tuple&lt;CountBoard&lt;0,6&gt;, CountBoard&lt;1,6&gt;,
+               CountBoard&lt;2,6&gt;, CountBoard&lt;3,6&gt;&gt; lines = ...;
+} _info[2];</pre>
       </div>
-      <p>Une case vide, noire ou blanche tient sur 2 bits : un bit "il y a une pierre noire ici", un bit "il y a une pierre blanche ici". <span class="mono">ERROR</span> (les deux bits à 1) ne devrait jamais arriver — une case ne peut pas porter les deux couleurs — mais le type est défini pour que ce cas soit détectable plutôt que silencieusement ignoré.</p>
 
-      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">BitBoard — le plateau entier en quelques entiers</h3>
-      <p>C'est la pièce la plus technique. Un plateau 19×19 a 361 cases. Un <span class="mono">unsigned long long</span> a 64 bits, donc <strong>3 lignes de 19 cases tiennent dans un seul mot</strong> (57 bits utilisés sur 64). Il faut alors <span class="mono">⌈19/3⌉ = 7</span> mots pour couvrir tout le plateau — une des deux couleurs.</p>
-      <div class="code-wrap">
-        <span class="code-label">Gomoku.class.hpp</span>
-        <pre class="code">constexpr WORD wordof(const Pos &amp;pos) const { return words[pos.y / LINES_PER_WORD]; }
-constexpr size_t bitof(const Pos &amp;pos) const { return pos.x + (pos.y % LINES_PER_WORD) * X; }</pre>
-      </div>
-      <p>Poser une pierre, la retirer, tester une case : trois opérations bit-à-bit (<span class="mono">|=</span>, <span class="mono">&amp;= ~</span>, <span class="mono">&amp;</span>), chacune en O(1) réel — pas d'accès mémoire dispersé, tout tient dans quelques registres. C'est ce qui rend des centaines de milliers d'appels à <span class="mono">play()</span>/<span class="mono">undo()</span> par coup jouable en 460ms.</p>
+      <p>361 bits ne tiennent pas dans un entier : il en faut <strong>sept mots de 64 bits</strong>, soit <strong>64 octets</strong> par plateau, index compris. Une intersection de deux plateaux, c'est sept <span class="mono">AND</span>. Compter les pierres, c'est sept <span class="mono">popcount</span> — une instruction machine chacune.</p>
 
-      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Rules — la chaîne de 6 caractères</h3>
-      <p>Le bot reçoit les règles actives sous forme compacte : un caractère pour la taille de grille, puis 5 caractères pour les règles. <span class="mono">pass</span> et <span class="mono">flanking</span> (règle Caro) ont été retirés du jeu ; <span class="mono">overline</span> n'est plus deux booléens séparés (gagnant + interdit) mais un seul caractère à 4 valeurs, pour ne plus pouvoir décrire une combinaison incohérente (ex: gagnante ET interdite en même temps) — voir <span class="mono">OverlineRule</span> côté frontend (Gomoku.ts).</p>
-      <div class="tbl-wrap">
-        <table class="tbl">
-          <tr><th>Index</th><th>Règle</th><th>Valeurs</th><th>Mandatory ?</th></tr>
-          <tr><td class="num">0</td><td>taille de grille</td><td><span class="mono">'5'</span> = 15×15, <span class="mono">'9'</span> = 19×19</td><td>19×19 imposé</td></tr>
-          <tr><td class="num">1</td><td>capture activée</td><td><span class="mono">'0'</span> / <span class="mono">'1'</span></td><td>oui</td></tr>
-          <tr><td class="num">2</td><td>capture de fin de partie (five imparfait)</td><td><span class="mono">'0'</span> / <span class="mono">'1'</span></td><td>oui</td></tr>
-          <tr><td class="num">3</td><td>overline</td><td><span class="mono">'1'</span> victoire (les deux), <span class="mono">'0'</span> légal sans gagner, <span class="mono">'f'</span> interdit (les deux), <span class="mono">'b'</span> interdit pour noir / victoire pour blanc (Renju)</td><td>oui (<span class="mono">'1'</span>)</td></tr>
-          <tr><td class="num">4</td><td>double-trois interdit</td><td><span class="mono">'0'</span> / <span class="mono">'1'</span> / <span class="mono">'b'</span> (noir seulement)</td><td>oui</td></tr>
-          <tr><td class="num">5</td><td>double-quatre interdit</td><td><span class="mono">'0'</span> / <span class="mono">'1'</span> / <span class="mono">'b'</span> (noir seulement)</td><td>bonus</td></tr>
-        </table>
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Pourquoi quatre orientations</h3>
+      <p>Le paramètre <span class="mono">AX</span> de <span class="mono">BitBoard&lt;AX&gt;</span> n'est pas décoratif : chaque valeur range les mêmes cases dans un <em>ordre différent</em>. En orientation 2, une diagonale devient une ligne horizontale. Du coup « décaler d'une case le long de l'axe » est toujours le même décalage de bits, quel que soit l'axe — un seul code pour quatre géométries.</p>
+
+      <div class="callout">
+        <span class="callout-label">La question qui vient</span>
+        « Vous stockez le plateau quatre fois ? » Oui, pour les <em>compteurs</em> (chapitre 2), pas pour les pierres : <span class="mono">stones</span> n'existe qu'en orientation 0. L'état complet pèse 3 272 octets, et la recherche le copie à chaque nœud plutôt que de défaire les coups — mesuré plus rapide sur ce moteur. Le coût est de la mémoire contre du temps, et c'est le temps qui est contraint par le sujet.
       </div>
     </section>
 
     <!-- ===================== CHAPITRE 2 ===================== -->
     <section class="chapter" id="ch2">
-      <div class="chapter-head"><span class="chapter-num">2</span><h2>Détection des menaces</h2></div>
+      <div class="chapter-head"><span class="chapter-num">2</span><h2>Compter des fenêtres, pas des alignements</h2></div>
 
-      <p>Avant les règles et avant l'heuristique, il y a une seule fonction qui répond à une question précise : <em>« si je pose une pierre ici, quel alignement est-ce que ça forme, et à quel point est-il dangereux ? »</em>. C'est <span class="mono">threatAt()</span>, et presque tout le reste du moteur (légalité des coups, détection de victoire, heuristique) l'utilise directement ou indirectement.</p>
+      <p>C'est l'idée centrale du moteur, et celle qu'il faut savoir dire en une phrase :</p>
+      <p style="font-size:1.05rem;"><strong>On ne cherche jamais les alignements. On compte, pour chaque fenêtre de cinq cases consécutives, combien de pierres chaque joueur y a.</strong></p>
 
-      <div class="quote-subject">
-        <span class="callout-label">Le sujet dit</span>
-        « Un free-three est un alignement de trois pierres qui, s'il n'est pas immédiatement bloqué, permet un alignement indéfendable de quatre pierres (c'est-à-dire un quatre avec ses deux extrémités libres). »
-      </div>
-
-      <p><span class="mono">threatAt()</span> traduit cette définition presque mot pour mot, mais <strong>à l'envers et récursivement</strong> : plutôt que de regarder un trois et se demander "est-ce qu'il devient un quatre ouvert ?", elle part d'un cinq et remonte.</p>
+      <p>Une fenêtre de cinq est une position gagnante potentielle. Sur 19×19 il y en a exactement <strong>1 020</strong> : 285 horizontales, 285 verticales, 225 par diagonale.</p>
 
       <div class="diagram">
-        <svg viewBox="0 0 640 190" width="100%" height="190" role="img" aria-label="Échelle des menaces : trois ouvert, quatre ouvert, cinq">
-          <!-- row three -->
+        <svg viewBox="0 0 660 200" width="100%" height="200" role="img" aria-label="Une rangée de pierres et les fenêtres de cinq qui la recouvrent">
           <g font-family="IBM Plex Mono, monospace" font-size="12">
-            <text x="10" y="24" fill="var(--ink-soft)">trois ouvert (O3)</text>
-            <g transform="translate(10,36)">
-              <!-- 6 cells -->
-              <g id="cellsA"></g>
+            <text x="8" y="18" fill="var(--ink-soft)">une rangée : deux pierres noires</text>
+            <g transform="translate(8,28)">
+              <rect x="0"   y="0" width="42" height="42" rx="6" fill="var(--paper)" stroke="var(--rule)"/>
+              <rect x="46"  y="0" width="42" height="42" rx="6" fill="var(--paper)" stroke="var(--rule)"/>
+              <rect x="92"  y="0" width="42" height="42" rx="6" fill="var(--paper)" stroke="var(--rule)"/>
+              <rect x="138" y="0" width="42" height="42" rx="6" fill="var(--paper)" stroke="var(--rule)"/>
+              <rect x="184" y="0" width="42" height="42" rx="6" fill="var(--paper)" stroke="var(--rule)"/>
+              <rect x="230" y="0" width="42" height="42" rx="6" fill="var(--paper)" stroke="var(--rule)"/>
+              <rect x="276" y="0" width="42" height="42" rx="6" fill="var(--paper)" stroke="var(--rule)"/>
+              <circle cx="113" cy="21" r="15" fill="var(--stone-black)"/>
+              <circle cx="159" cy="21" r="15" fill="var(--stone-black)"/>
             </g>
-
-            <text x="10" y="100" fill="var(--ink-soft)">→ si étendu : quatre ouvert (O4)</text>
-            <g transform="translate(10,112)">
-              <g id="cellsB"></g>
+            <text x="8" y="96" fill="var(--ink-soft)">les fenêtres qui la recouvrent, et leur compte</text>
+            <g transform="translate(8,104)" stroke-width="2" fill="none">
+              <rect x="0"   y="4"  width="226" height="16" rx="8" stroke="var(--brass)"/>
+              <rect x="46"  y="26" width="226" height="16" rx="8" stroke="var(--brass)"/>
+              <rect x="92"  y="48" width="226" height="16" rx="8" stroke="var(--seal)"/>
             </g>
-
-            <text x="10" y="176" fill="var(--ink-soft)">→ si étendu encore : cinq (victoire)</text>
+            <g transform="translate(8,104)" fill="var(--ink-soft)" stroke="none">
+              <text x="238" y="16">2 pierres  →  digits[2]</text>
+              <text x="284" y="38">2 pierres  →  digits[2]</text>
+              <text x="330" y="60" fill="var(--seal)">2 pierres  →  digits[2]</text>
+            </g>
           </g>
         </svg>
-        <div class="diagram-caption">threatAt place virtuellement une pierre une case plus loin (threatOf) et se demande : « est-ce que ça fait un cinq ? ». Si oui des deux côtés → four ouvert. Si un four ouvert est atteignable des deux côtés depuis un trois → three ouvert.</div>
+        <div class="diagram-caption">Trois fenêtres contiennent les deux pierres : chacune est enregistrée dans <span class="mono">digits[2]</span> de l'axe horizontal. Poser une troisième pierre les fera basculer dans <span class="mono">digits[3]</span>, sans qu'aucun alignement n'ait jamais été parcouru.</div>
       </div>
 
       <div class="code-wrap">
-        <span class="code-label">Gomoku.cpp — threatAt (extraits clés)</span>
-        <pre class="code">const Threat ext0 = threatOf(beforeStart, dir, player, min + 1);  <span class="c">// et si j'étends à gauche…</span>
-const Threat ext1 = threatOf(afterEnd,    dir, player, min + 1);  <span class="c">// …et si j'étends à droite ?</span>
-
-if (is5_0 &amp;&amp; is5_1)
-    return {len == 4 ? ThreatType::O4 : ThreatType::FourFour, ...};  <span class="c">// four ouvert</span>
-
-if (isO4_0 || isO4_1)
-    return {ThreatType::O3, ...};  <span class="c">// three qui MÈNE à un four ouvert</span></pre>
+        <span class="code-label">bot/inc/BitBoard.class.hpp</span>
+        <pre class="code">template&lt;size_t AX, size_t N&gt;
+class CountBoard {
+    BitBoard&lt;AX&gt; digits[N];   <span class="c">// digits[i] = les fenêtres contenant EXACTEMENT i pierres</span>
+public:
+    const BitBoard&lt;AX&gt; &amp;of(size_t i) const { return digits[i]; }</pre>
       </div>
 
-      <p><span class="mono">threatOf()</span> est le pivot : il pose une pierre hypothétique (<span class="mono">rawPlace</span>), appelle <span class="mono">threatAt()</span> sur cette pierre imaginaire, puis la retire (<span class="mono">rawRemove</span>). C'est une simulation, pas une vraie action de jeu — rien n'est enregistré dans l'historique.</p>
+      <p>Chaque joueur a quatre <span class="mono">CountBoard</span> (un par axe) de six niveaux, 0 à 5 pierres. Poser une pierre fait basculer les fenêtres qui la contiennent d'un niveau au suivant — une poignée d'opérations bit à bit, indépendamment de la longueur des alignements en jeu.</p>
 
-      <p>Le paramètre <span class="mono">min</span> sert à couper la récursion tôt quand on n'a besoin que d'une réponse partielle : <span class="mono">applyMove()</span> ne cherche que des cinq (<span class="mono">min=5</span>, pas besoin de descendre plus bas), alors que <span class="mono">isLegalMove()</span> a besoin de tout, y compris les three (<span class="mono">min=3</span>).</p>
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Une fenêtre « vivante »</h3>
+      <p>Une fenêtre où l'adversaire a au moins une pierre ne peut plus jamais devenir un cinq : elle est morte. Le test tient en une intersection, et il revient partout dans le moteur :</p>
+      <div class="code-wrap">
+        <span class="code-label">les fenêtres vivantes de P contenant n pierres</span>
+        <pre class="code">p0lines.of(n) &amp; p1lines.of(0)
+<span class="c">   ↑ P y a n pierres      ↑ l'adversaire n'y en a aucune</span></pre>
+      </div>
 
       <div class="callout">
-        <span class="callout-label">Point de soutenance</span>
-        Insiste sur le fait que la fonction ne "sait" pas ce qu'est un three ou un four au sens abstrait — elle sait seulement classer un alignement par sa longueur et poser la question récursive "et si j'ajoute une pierre au bout, ça devient quoi ?". La hiérarchie O3 → O4 → Five émerge de cette seule question posée deux fois de suite.
+        <span class="callout-label">Ce que ce modèle donne gratuitement</span>
+        Les <strong>motifs cassés</strong>. <span class="mono">XX.XX</span> est une fenêtre à quatre pierres, exactement comme <span class="mono">XXXX</span> — le trou ne change rien au comptage. Un moteur qui parcourt des alignements contigus, lui, n'y voit que deux paires et a besoin d'un correctif dédié pour ne pas les sous-évaluer. Ici, le cas n'existe pas.
       </div>
     </section>
 
     <!-- ===================== CHAPITRE 3 ===================== -->
     <section class="chapter" id="ch3">
-      <div class="chapter-head"><span class="chapter-num">3</span><h2>Les règles du jeu</h2></div>
+      <div class="chapter-head"><span class="chapter-num">3</span><h2>Le score, maintenu coup par coup</h2></div>
 
-      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Capture — flanquer une paire</h3>
-      <p>À chaque coup, <span class="mono">play()</span> teste les 8 directions autour de la pierre posée. Le motif cherché est <strong>adversaire, adversaire, moi</strong> à trois cases de distance :</p>
+      <p>Le moteur ne calcule jamais le score d'une position. Il maintient <strong>un seul entier</strong>, mis à jour par différence à chaque pierre posée ou retirée.</p>
+
       <div class="code-wrap">
-        <span class="code-label">Gomoku.cpp — play()</span>
-        <pre class="code">const Pos pos0 = move + dir;      <span class="c">// adversaire ?</span>
-const Pos pos1 = pos0 + dir;      <span class="c">// adversaire ?</span>
-const Pos pos2 = pos1 + dir;      <span class="c">// moi ?</span>
-if (stones[!player][pos0] &amp;&amp; stones[!player][pos1] &amp;&amp; stones[player][pos2]) {
-    stones[!player] -= pos0; stones[!player] -= pos1;   <span class="c">// capture</span>
-    captures[player] += 2;
-}</pre>
+        <span class="code-label">bot/inc/Gomoku.class.hpp — l'échelle des valeurs</span>
+        <pre class="code">static constexpr long line_values[6] = {0, 1, 5, 50, 1000, 50000};
+<span class="c">//                                       0  1  2   3     4      5 pierres</span></pre>
       </div>
-      <p>Le <span class="mono">cap_mask</span> (16 bits, 8 utilisés) est calculé une fois par coup pour éviter de tester les directions qui sortiraient du plateau, puis affiné direction par direction : chaque bit qui a effectivement capturé reste à 1. Ce masque exact est stocké dans l'historique du coup (<span class="mono">Move::captures</span>) — <span class="mono">undo()</span> n'a donc pas besoin de recalculer quoi que ce soit, il relit simplement quelles directions ont capturé et restaure les pierres correspondantes.</p>
 
-      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Victoire par capture (10 pierres)</h3>
-      <p>Vérifiée en une ligne dans <span class="mono">applyMove()</span> : <span class="mono">captures[mover] &gt;= 10</span>, testée avant toute autre condition de fin de partie. Il n'y a pas de traitement du cas « les deux joueurs à 10 en même temps » : seul le joueur qui vient de jouer voit son compteur bouger (<span class="mono">play()</span> ne crédite que lui), et ce test étant le tout premier, atteindre 10 termine la partie sur le coup même. L'adversaire ne peut donc jamais être trouvé à 10 en début de tour — les branches correspondantes étaient du code mort et ont été supprimées.</p>
+      <p>Le score est la somme, sur toutes les fenêtres vivantes, de <span class="mono">line_values[nombre de pierres]</span> — positif pour le joueur 1, négatif pour le joueur 0. L'échelle est très convexe : une fenêtre à quatre pierres vaut vingt fenêtres à trois. C'est voulu — une menace immédiate doit écraser toute considération de développement.</p>
 
-      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Capture de fin de partie — le five "imparfait"</h3>
-      <div class="quote-subject">
-        <span class="callout-label">Le sujet dit</span>
-        « Un joueur qui aligne cinq pierres ne gagne que si l'adversaire ne peut pas casser cette ligne par une capture. »
+      <p>Poser une pierre a exactement <strong>deux effets</strong>, et le code a un updater pour chacun :</p>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <tr><th>Updater</th><th>Effet</th><th>Contribution</th></tr>
+          <tr><td><span class="mono">upgrade_updater</span></td><td>mes fenêtres passent de <span class="mono">i</span> à <span class="mono">i+1</span> pierres</td><td class="num">+ (line_values[i+1] − line_values[i])</td></tr>
+          <tr><td><span class="mono">block_updater</span></td><td>les fenêtres adverses que je viens de tuer sortent du compte</td><td class="num">+ line_values[i], au signe du bloqueur</td></tr>
+        </table>
       </div>
-      <p>C'est le mécanisme le plus subtil du moteur : <span class="mono">delayedWin</span>. Quand un five est formé mais qu'une de ses pierres fait partie d'une paire capturable (<span class="mono">isUnperfect5</span>), la victoire n'est <strong>pas</strong> immédiate : le drapeau est levé et la partie continue un tour de plus.</p>
-      <div class="code-wrap">
-        <span class="code-label">Gomoku.cpp — applyMove()</span>
-        <pre class="code"><span class="c">// tour suivant : la ligne a-t-elle survécu au coup de l'adversaire ?</span>
-if (outcome.state == Result::Ongoing &amp;&amp; wasDelayed) {
-    bool intact = /* toutes les pierres de la ligne sont encore là */;
-    if (!intact) delayedWin = false;              <span class="c">// cassée : la partie continue normalement</span>
-    else outcome = {Result::Win, dPlayer};         <span class="c">// intacte : victoire (validée avec un tour de retard)</span>
-}</pre>
-      </div>
-      <p>L'ordre des vérifications dans <span class="mono">applyMove()</span> compte : le contrôle des 10 captures passe <em>avant</em> la résolution du <span class="mono">delayedWin</span>. Si le coup qui casse la ligne est justement le coup qui fait atteindre 10 captures à son auteur, celui-ci gagne par capture — exactement la deuxième puce du sujet ("si l'adversaire a déjà perdu quatre paires et que l'autre peut en capturer une de plus, il gagne").</p>
 
-      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Interdiction du double-trois</h3>
-      <div class="quote-subject">
-        <span class="callout-label">Le sujet dit</span>
-        « Il n'est pas interdit d'introduire un double-trois en capturant une paire. »
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Le bug de signe : celui qu'il faut savoir raconter</h3>
+      <p>Les deux updaters posent <span class="mono">sign = P ? 1 : −1</span> et écrivent dans le <em>même</em> score. Le second recevait <span class="mono">!P</span> au lieu de <span class="mono">P</span>. Comme <span class="mono">sign<sub>P</sub> = −sign<sub>!P</sub></span>, le terme était exactement inversé : <strong>bloquer une menace dégradait l'évaluation de celui qui bloque</strong>.</p>
+
+      <p>Ce bug ne plante pas et ne déclenche aucune assertion. Il rend la défense invisible : le moteur conclut que l'adversaire gagne quoi qu'il fasse — puisque toute parade empire son propre score — et arrête de chercher. Mesuré à l'époque où le tri des candidats dépendait de ce terme, sur une position où l'adversaire vient d'aligner quatre pierres :</p>
+
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <tr><th>Version</th><th>Nœuds explorés</th><th>Coup joué</th><th>Verdict</th></tr>
+          <tr><td>avec le bug</td><td class="num">1 066</td><td><span class="mono">0:1</span></td><td>joue dans un coin, ignore le quatre</td></tr>
+          <tr><td>corrigé</td><td class="num">46 239</td><td><span class="mono">9:5</span></td><td>bloque</td></tr>
+        </table>
       </div>
-      <p><span class="mono">isLegalMove()</span> place la pierre hypothétiquement, collecte toutes les menaces dans les 4 directions, puis retire la pierre. Deux menaces <span class="mono">O3</span> ou plus → coup refusé. Mais avant même de vérifier ça :</p>
-      <div class="code-wrap">
-        <span class="code-label">Gomoku.cpp — isLegalMove()</span>
-        <pre class="code"><span class="c">// Un coup qui capture ou gagne échappe aux règles de forme interdite</span>
-if (winning || (rules.capture &amp;&amp; wouldCapture(pos, player)))
-    return true;</pre>
-      </div>
-      <p>C'est la traduction directe de la citation ci-dessus : un coup qui capture une paire est exempté de la vérification double-trois, quoi qu'il en soit de sa forme.</p>
+
+      <p>Le rapport de 43 entre les deux comptes est le symptôme : une recherche qui croit la partie déjà jouée coupe tout. C'est aussi ce qui l'a fait trouver — pas une partie perdue, mais un compteur de nœuds absurdement bas.</p>
 
       <div class="callout">
-        <span class="callout-label">Point de soutenance</span>
-        Si le grader teste le double-trois : joue un coup qui crée deux three ouverts simultanément sur un plateau vide de captures → refusé. Puis rejoue la même position avec une paire adverse capturable par ce coup → accepté. Ça démontre les deux règles en une seule manipulation.
+        <span class="callout-label">La suite est instructive</span>
+        Sur le moteur d'aujourd'hui, réintroduire le même bug ne change plus le coup joué sur cette position. Deux changements ultérieurs l'ont neutralisé : le tri des candidats passe par <span class="mono">moveDelta</span>, qui a son propre signe correct (chapitre 6), et un four ouvert adverse vaut désormais un terme explicite (chapitre 4). Le bug reste un bug — l'évaluation des feuilles est fausse — mais il n'est plus amplifié par l'ordre des coups. Morale : un bug peut être catastrophique par ce qu'il <em>alimente</em>, pas seulement par ce qu'il calcule.
       </div>
     </section>
 
     <!-- ===================== CHAPITRE 4 ===================== -->
     <section class="chapter" id="ch4">
-      <div class="chapter-head"><span class="chapter-num">4</span><h2>L'heuristique</h2></div>
+      <div class="chapter-head"><span class="chapter-num">4</span><h2>Ce que le comptage par fenêtres ne dit pas</h2></div>
 
-      <p>Le sujet le dit sans détour : l'heuristique est la partie la plus difficile, parce que Minimax lui-même ne fait "que" comparer des nombres — encore faut-il que ces nombres reflètent qui est en train de gagner sur un plateau qui n'est pas terminé.</p>
+      <p>Le modèle du chapitre 2 est <strong>linéaire en l'ouverture</strong>, et c'est sa limite. Un four ouvert <span class="mono">.XXXX.</span> occupe deux fenêtres vivantes, un four bloqué <span class="mono">OXXXX.</span> une seule : 2 000 contre 1 000. Or le premier gagne la partie et le second se pare d'un coup. Le rapport devrait être écrasant, pas double.</p>
 
-      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">patternWeight — la table de poids</h3>
+      <p>La correction est exacte, et gratuite dans cette représentation :</p>
+      <p style="font-size:1.05rem;"><strong>Un four est ouvert si deux fenêtres vivantes <em>consécutives</em> contiennent chacune quatre pierres.</strong></p>
+
       <div class="tbl-wrap">
         <table class="tbl">
-          <tr><th>Forme</th><th>Poids</th><th>Pourquoi</th></tr>
-          <tr><td>Cinq</td><td class="num">100 000</td><td>partie gagnée</td></tr>
-          <tr><td>Quatre ouvert (.XXXX.)</td><td class="num">15 000</td><td>imparable — deux façons de faire cinq</td></tr>
-          <tr><td>Quatre fermé (XXXX.)</td><td class="num">2 000</td><td>menace réelle mais bloquable</td></tr>
-          <tr><td>Trois ouvert (.XXX.)</td><td class="num">800</td><td>free-three : mène à un quatre ouvert</td></tr>
-          <tr><td>Trois fermé</td><td class="num">150</td><td>faible, un seul prolongement possible</td></tr>
-          <tr><td>Deux ouvert</td><td class="num">40</td><td>potentiel à long terme</td></tr>
-          <tr><td>Deux fermé</td><td class="num">10</td><td>presque négligeable</td></tr>
+          <tr><th>Motif</th><th>Fenêtres à 4 pierres consécutives</th><th>Verdict</th></tr>
+          <tr><td><span class="mono">.XXXX.</span></td><td class="num">2</td><td>four ouvert — deux points de complétion, imparable</td></tr>
+          <tr><td><span class="mono">OXXXX.</span></td><td class="num">1</td><td>four fermé — un seul point, se pare</td></tr>
+          <tr><td><span class="mono">XX.XX</span></td><td class="num">1</td><td>four fermé, et c'est correct : le trou est l'unique complétion</td></tr>
         </table>
       </div>
-      <p>Le saut 800 → 15 000 entre trois ouvert et quatre ouvert n'est pas arbitraire : c'est exactement le point où une menace passe de "gênante" à "imparable" (le sujet : un four ouvert a "deux extrémités non obstruées"). L'heuristique doit refléter cette rupture qualitative, pas juste croître régulièrement.</p>
 
-      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">evaluate() — la fonction de feuille</h3>
+      <p>La même construction à trois pierres donne le three ouvert — <strong>y compris cassé</strong> : <span class="mono">.X.XX.</span> tombe sans une ligne de code dédiée. Un moteur qui compte des alignements contigus a besoin d'un correctif séparé pour ce cas ; ici il découle de la définition.</p>
+
       <div class="code-wrap">
-        <span class="code-label">main.cpp — evaluate()</span>
-        <pre class="code"><span class="c">// Balayage borné aux search boxes, pas au plateau entier</span>
-for (const Box &amp;box : searchBoxes) for (chaque case de la box) {
-
-    <span class="c">// Pierre qui est le DÉBUT de son alignement</span>
-    <span class="c">// Paire capturable = alignement de longueur 2, un flanc vide, l'autre adverse</span>
-    if (len == 2 &amp;&amp; flancs menaçants) score[adverse] += W_CAPTURE * (2*captures + 1);
-
-    gateBySpace(...);            <span class="c">// un bout "ouvert" sans place pour un five est fermé</span>
-    w  = patternWeight(len, extrémités ouvertes);
-    w += brokenBonus(...);       <span class="c">// XX.XX vaut un four, pas deux twos</span>
-    if (alignement touché par le dernier coup) w += w / 8;
-    score[player] += w;
-    if (w &gt;= W_OPEN_THREE) strongThreats[player]++;
-}
-
-if (strongThreats[p] &gt;= 2) score[p] += W_FORK;   <span class="c">// fourche</span>
-score[0] += W_CAPTURE * captures(0)²;
-score[1] += W_CAPTURE * captures(1)²;
-
-return score[toMove] - score[!toMove];   <span class="c">// convention négamax</span></pre>
+        <span class="code-label">bot/src/Gomoku.cpp — Gomoku::threats()</span>
+        <pre class="code">BitBoard&lt;AX&gt; const a4{ p0lines.of(4) &amp; alive };
+int const n4 = vec::sum(vec::popcount( a4 &amp; a4.shift(AXES[AX]) ));
+<span class="c">//                                     ↑ départs voisins tous les deux vivants</span></pre>
       </div>
-      <p>Chaque terme répond à un critère de la grille :</p>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Les captures, deux fois</h3>
       <ul>
-        <li><strong>Compter chaque alignement une seule fois.</strong> On ne compte un alignement que depuis sa première pierre (<span class="mono">prev</span> n'est pas la même couleur), sinon un alignement de 4 pierres serait compté 4 fois.</li>
-        <li><strong>Assez de place pour un five ?</strong> <span class="mono">gateBySpace()</span> : une extrémité vide ne compte comme "ouverte" que si l'espace restant, les deux côtés combinés, permet encore d'atteindre 5. Un motif étouffé contre un bord ne vaut pas un motif libre.</li>
-        <li><strong>Motifs cassés.</strong> <span class="mono">brokenBonus()</span> : deux groupes séparés par un seul trou et tenant dans une fenêtre de 5 (<span class="mono">XX.XX</span>) sont à un coup du five, exactement comme un four contigu — alors que le comptage par run n'y voit que deux twos. Classé comme four <em>fermé</em>, le trou étant l'unique point de complétion.</li>
-        <li><strong>Captures potentielles.</strong> Une capture possible est valorisée avant même d'être jouée, avec le même poids marginal que le bonus quadratique (<span class="mono">2·captures + 1</span>, sa dérivée) : menacer la 5<sup>e</sup> paire pèse bien plus que la 1<sup>re</sup>. La détection part de la <em>paire menacée</em>, pas de la case d'où on capturerait : la règle étant <span class="mono">VIDE,C,C,!C</span>, une paire capturable est forcément un alignement de longueur exactement 2 avec un flanc vide et l'autre tenu par l'adversaire — donc lisible sur les alignements qu'on parcourt déjà (voir l'encadré ci-dessous).</li>
-        <li><strong>Bonus de capture quadratique.</strong> <span class="mono">captures²</span> plutôt que <span class="mono">captures</span> : passer de 2 à 4 captures compte peu, mais passer de 8 à 10 (qui gagne la partie) doit peser énormément plus. Le carré fait croître l'urgence en même temps qu'on se rapproche de la victoire par capture, sans avoir besoin d'un cas spécial.</li>
-        <li><strong>Fourche.</strong> Deux menaces "three ouvert ou mieux" simultanées ne peuvent pas être bloquées d'un seul coup. Approximation assumée : on ne vérifie pas que les points de blocage sont réellement distincts.</li>
-        <li><strong>Part dynamique.</strong> Un alignement touché par le dernier coup est majoré d'une fraction de son propre poids : une menace vivante compte plus qu'une forme figée depuis dix tours. C'est le seul terme qui dépend de l'enchaînement des coups et pas seulement du plateau final.</li>
+        <li><strong>Réalisées</strong> — terme quadratique : à dix pierres prises il vaut 50 000, soit exactement un cinq. Sa dérivée entre dans le tri, pour que la cinquième paire pèse plus que la première. Sans ce terme, le moteur détectait la victoire par capture mais ne la cherchait jamais : il capturait par accident.</li>
+        <li><strong>Menacées</strong> — <span class="mono">capturable()</span> compte les paires que l'adversaire peut prendre <em>maintenant</em>, par un balayage bitboard du plateau (trois décalages par direction). Terme purement statique, et c'est tout son intérêt : une paire exposée coûte un coup, donc elle se paie souvent au-delà de l'horizon de la recherche. Sans lui, une feuille où mes pierres sont à prendre s'évalue comme une feuille saine.</li>
       </ul>
-      <div class="callout">
-        <span class="callout-label">Optimisation : changer de point de vue, pas de constante</span>
-        La détection des captures potentielles sondait initialement <em>chaque case vide</em> de la zone avec <span class="mono">wouldCapture()</span>, deux fois (une par joueur), chaque appel balayant 8 directions — à chaque feuille. C'était le poste le plus cher de l'heuristique. La reformulation ne change pas l'information calculée (l'ensemble des opportunités détectées est rigoureusement identique), seulement la question posée : « quelles paires sont capturables ? » se lit sur les alignements déjà parcourus, alors que « d'où pourrais-je capturer ? » impose de tester toutes les cases vides. Résultat mesuré : <strong>+79% de nœuds explorés</strong> à budget constant, et le temps de réponse moyen sur les 20 premiers plis passe de <strong>655ms à 488ms</strong> — ce qui fait repasser le projet sous la demi-seconde exigée. Vérifié neutre en force de jeu sur 48 parties de self-play (45,8%, soit 0,58 écart-type de la parité).
-      </div>
-      <div class="callout">
-        <span class="callout-label">Honnêteté sur les mesures</span>
-        Ces termes ont été validés en self-play (<span class="mono">tools/selfplay.py</span>, deux binaires qui s'affrontent sur N parties, ouvertures appariées couleurs inversées) : <strong>50% de score dans les deux campagnes</strong> (6V-6D sur 12 parties pour les trois premiers ajouts, 8V-8D sur 16 parties pour les motifs cassés). Autrement dit, la connaissance gagnée et la profondeur perdue pour la payer s'annulent à peu près. Ils sont conservés pour la complétude de l'heuristique, pas parce qu'un gain de force a été démontré — et l'échantillon (±13 points d'écart-type) n'exclut pas un petit effet dans un sens ou l'autre.
-      </div>
-      <p>Le score final est toujours <em>du point de vue du joueur qui doit jouer</em> (<span class="mono">score[toMove] - score[!toMove]</span>) — c'est la convention négamax, expliquée au chapitre suivant.</p>
 
-      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Le même calcul, recyclé pour trier les coups</h3>
-      <p><span class="mono">localPatternScore()</span> reprend <span class="mono">patternWeight</span>, mais appliqué à une seule pierre hypothétique plutôt qu'au plateau entier — utilisé par <span class="mono">generateCandidates()</span> pour classer les coups avant de lancer la recherche (voir chapitre 6).</p>
-      <p>Il est volontairement <strong>plus grossier</strong> que <span class="mono">evaluate()</span> : ni le contrôle d'espace, ni les motifs cassés. Les deux fonctions n'ont pas le même métier. <span class="mono">evaluate()</span> fixe la <em>valeur</em> d'une feuille, où une imprécision se propage directement dans la décision. <span class="mono">localPatternScore</span> ne fait que <em>classer</em> des coups pour choisir lesquels explorer — il doit séparer un coup sérieux d'un coup médiocre, pas départager finement deux bons coups : la recherche s'en charge derrière.</p>
       <div class="callout">
-        <span class="callout-label">Pourquoi ça compte : où passe vraiment le temps</span>
-        Les deux raffinements avaient d'abord été mis dans les <em>deux</em> fonctions, par symétrie. Un chronométrage a montré le déséquilibre : sur les 460ms du budget, <span class="mono">generateCandidates</span> pesait <strong>382ms</strong> et <span class="mono">evaluate</span> seulement <strong>58ms</strong> — parce que la première est appelée deux fois par case candidate à chaque nœud interne, la seconde une fois par feuille. Les retirer du tri (en les gardant dans l'évaluation) a rendu <strong>+54% de nœuds et un pli de profondeur</strong>, pour un score de self-play de 58,3% sur 24 parties. La finesse coûtait le plus cher exactement là où elle servait le moins.
+        <span class="callout-label">Le compromis, dit franchement</span>
+        Ces termes ne sont <strong>pas incrémentaux</strong> : ils sont recalculés à chaque feuille, et coûtent 10,5 % du débit (85 504 nœuds contre 95 488 sans eux, à budget égal). Le comptage par fenêtres, lui, reste incrémental — mais il ne sait pas exprimer une non-linéarité, et un four ouvert ne vaut pas deux fours bloqués. Le chapitre 9 dit ce que ce compromis rapporte réellement.
       </div>
     </section>
 
     <!-- ===================== CHAPITRE 5 ===================== -->
     <section class="chapter" id="ch5">
-      <div class="chapter-head"><span class="chapter-num">5</span><h2>Minimax &amp; négamax</h2></div>
+      <div class="chapter-head"><span class="chapter-num">5</span><h2>La recherche, écrite contre un concept</h2></div>
 
-      <p>L'idée de base de Minimax, sans code : à chaque tour, un joueur choisit le coup qui <strong>maximise</strong> son score, en supposant que l'adversaire, à son tour, choisira toujours le coup qui le <strong>minimise</strong>. On construit un arbre de tous les coups possibles, et on remonte les scores depuis les feuilles (positions finales ou limite de profondeur) jusqu'à la racine, en alternant max et min à chaque niveau.</p>
+      <p>La recherche ne connaît pas le Gomoku. Elle est écrite contre un <strong>concept C++</strong> qui liste ce qu'elle exige d'un état de jeu :</p>
 
-      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Pourquoi négamax plutôt que minimax "classique" ?</h3>
-      <p>Gomoku est un jeu à somme nulle et symétrique : ce qui est bon pour moi est exactement aussi mauvais pour mon adversaire, d'une magnitude égale. Ça permet une simplification élégante : au lieu d'écrire deux fonctions (une qui maximise, une qui minimise), <strong>une seule fonction</strong> maximise toujours, du point de vue du joueur au trait — et on neutralise l'alternance en inversant le signe à chaque appel récursif.</p>
       <div class="code-wrap">
-        <span class="code-label">main.cpp — negamax()</span>
-        <pre class="code">v = -negamax(state, depth - 1, -beta, -alpha);</pre>
-      </div>
-      <p>Le signe moins dit : "le score de mon adversaire, c'est l'opposé du mien". La fenêtre <span class="mono">[alpha, beta]</span> est aussi inversée et permutée en <span class="mono">[-beta, -alpha]</span> — c'est la même bascule de perspective appliquée aux bornes de l'élagage.</p>
-
-      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">L'élagage alpha-bêta</h3>
-      <p>Explorer tout l'arbre serait beaucoup trop lent (branchement 5, profondeur 10 → 5¹⁰ ≈ 10 millions de nœuds, et bien plus sans la coupe des candidats). Alpha-bêta permet de couper des branches entières <strong>sans changer le résultat</strong> : dès qu'on prouve qu'un coup est "assez mauvais" pour que l'adversaire ne le laisse jamais arriver, plus la peine de l'explorer en détail.</p>
-      <ul>
-        <li><span class="mono">alpha</span> — le meilleur score que <strong>je</strong> peux déjà garantir sur cette branche.</li>
-        <li><span class="mono">beta</span> — le meilleur score que <strong>l'adversaire</strong> peut déjà garantir plus haut dans l'arbre.</li>
-        <li>Si <span class="mono">alpha &gt;= beta</span>, l'adversaire a ailleurs une option au moins aussi bonne pour lui — il ne laissera jamais la partie arriver ici. Couper.</li>
-      </ul>
-
-      <div class="diagram">
-        <svg viewBox="0 0 640 260" width="100%" height="260" role="img" aria-label="Arbre négamax avec une branche coupée par alpha-bêta">
-          <g stroke="var(--ink-faint)" stroke-width="1.4" fill="none">
-            <line x1="320" y1="34" x2="140" y2="120"/>
-            <line x1="320" y1="34" x2="500" y2="120"/>
-            <line x1="140" y1="120" x2="70"  y2="210"/>
-            <line x1="140" y1="120" x2="210" y2="210"/>
-            <line x1="500" y1="120" x2="430" y2="210"/>
-            <line x1="500" y1="120" x2="570" y2="210" stroke-dasharray="4 4"/>
-          </g>
-          <g font-family="IBM Plex Mono, monospace" font-size="12" text-anchor="middle">
-            <circle cx="320" cy="34" r="15" fill="var(--paper)" stroke="var(--seal)" stroke-width="2"/>
-            <text x="320" y="38" fill="var(--seal)">racine</text>
-
-            <circle cx="140" cy="120" r="14" fill="var(--paper-raised-2)" stroke="var(--ink-faint)" stroke-width="1.4"/>
-            <text x="140" y="124" fill="var(--ink)">A</text>
-            <circle cx="500" cy="120" r="14" fill="var(--paper-raised-2)" stroke="var(--ink-faint)" stroke-width="1.4"/>
-            <text x="500" y="124" fill="var(--ink)">B</text>
-
-            <circle cx="70"  cy="210" r="13" fill="var(--paper-raised)" stroke="var(--ink-faint)" stroke-width="1.2"/>
-            <text x="70" y="214" fill="var(--ink-soft)">+3</text>
-            <circle cx="210" cy="210" r="13" fill="var(--paper-raised)" stroke="var(--ink-faint)" stroke-width="1.2"/>
-            <text x="210" y="214" fill="var(--ink-soft)">+7</text>
-
-            <circle cx="430" cy="210" r="13" fill="var(--paper-raised)" stroke="var(--ink-faint)" stroke-width="1.2"/>
-            <text x="430" y="214" fill="var(--ink-soft)">+2</text>
-            <circle cx="570" cy="210" r="13" fill="var(--paper)" stroke="var(--ink-faint)" stroke-width="1.2" stroke-dasharray="3 3" opacity="0.5"/>
-            <text x="570" y="214" fill="var(--ink-faint)" opacity="0.6">?</text>
-
-            <text x="570" y="238" fill="var(--seal)" font-size="11">coupé</text>
-          </g>
-        </svg>
-        <div class="diagram-caption">A a déjà garanti +7 (le mieux entre +3 et +7). B trouve d'abord +2 : puisque la racine choisira le pire des deux nœuds pour l'adversaire (ici, dans une vraie alternance min/max), dès que le score courant de B ne peut plus dépasser ce que A garantit déjà, la dernière branche de B (« ? ») n'a plus besoin d'être regardée en détail — quel que soit son score, il ne changera pas le choix final.</div>
+        <span class="code-label">bot/inc/search.hpp</span>
+        <pre class="code">template&lt;class S&gt;
+concept State = requires(S const cs, typename S::move_t m) {
+    { cs.player()    } -&gt; std::convertible_to&lt;bool&gt;;
+    { cs.terminal()  } -&gt; std::convertible_to&lt;bool&gt;;
+    { cs.winner()    } -&gt; std::convertible_to&lt;int&gt;;    <span class="c">// -1 = personne</span>
+    { cs.evaluate()  } -&gt; std::convertible_to&lt;int&gt;;    <span class="c">// du point de vue du trait</span>
+    { cs.hash()      } -&gt; std::convertible_to&lt;uint64_t&gt;;
+    { cs.candidates()} -&gt; std::convertible_to&lt;std::vector&lt;typename S::move_t&gt;&gt;;
+    { cs.after(m)    } -&gt; std::convertible_to&lt;S&gt;;
+    { m == m         } -&gt; std::convertible_to&lt;bool&gt;;
+};</pre>
       </div>
 
-      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">PVS / negascout — la fenêtre nulle</h3>
-      <p>Alpha-bêta seul traite tous les coups d'un nœud de la même façon. Or le tri des candidats (chapitre 6) et le coup mémorisé dans la table de transposition placent en tête celui qui est <em>probablement</em> le meilleur — les suivants ne servent le plus souvent qu'à confirmer qu'ils sont moins bons. PVS exploite ça : le premier coup est cherché à fenêtre complète, les autres avec une <strong>fenêtre nulle</strong>, beaucoup moins chère, qui répond juste "oui ou non, est-ce mieux qu'alpha ?".</p>
-      <div class="code-wrap">
-        <span class="code-label">main.cpp — negamax()</span>
-        <pre class="code">if (first) {
-    v = -negamax(state, depth - 1, -beta, -alpha);        <span class="c">// fenêtre complète</span>
-} else {
-    v = -negamax(state, depth - 1, -alpha - 1, -alpha);   <span class="c">// fenêtre nulle</span>
-    if (v &gt; alpha &amp;&amp; v &lt; beta)                             <span class="c">// hypothèse fausse :</span>
-        v = -negamax(state, depth - 1, -beta, -alpha);    <span class="c">// on re-cherche vraiment</span>
-}</pre>
-      </div>
-      <p>Le pari : la re-recherche à fenêtre complète, qui coûte double, reste rare parce que l'ordre des coups est bon. Mesuré sur une position de milieu de partie à budget constant (460 ms) : <strong>profondeur 11 → 12</strong>. C'est un gain gratuit en qualité — même évaluation, simplement explorée plus loin — contrairement aux enrichissements de l'heuristique, qui eux se paient en profondeur perdue (chapitre 4).</p>
+      <p><strong>Pourquoi ce détour ?</strong> Parce que le moteur exige GCC 16 (chapitre 0), et que l'algorithme, lui, n'a besoin de rien de spécial. Écrite contre le concept, la recherche se compile et se teste <strong>en C++23 standard contre un état factice</strong> : <span class="mono">tests/search_test.cpp</span>, 55 vérifications, sur n'importe quelle machine.</p>
 
-      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Le score de victoire dépend de la profondeur</h3>
-      <div class="code-wrap">
-        <span class="code-label">main.cpp</span>
-        <pre class="code">if (outcome.state == Result::Win)
-    v = MATE_SCORE + depth;</pre>
+      <p>Ce test ne compare pas la recherche à elle-même. Il vérifie une propriété : <em>le coup choisi par alpha-bêta a exactement la valeur minimax de la position</em>. Une version antérieure recalculait cette valeur avec la même fonction que la recherche — elle comparait le minimax à lui-même, et n'aurait rien attrapé.</p>
+
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <tr><th>Élément</th><th>Ce qu'il apporte</th></tr>
+          <tr><td><strong>Négamax</strong></td><td>Une seule fonction au lieu de min/max séparés : le jeu est à somme nulle, donc <span class="mono">max(a,b) = −min(−a,−b)</span>.</td></tr>
+          <tr><td><strong>Alpha-bêta</strong></td><td>Coupe les branches dont on peut <em>prouver</em> qu'elles ne changeront pas la décision. Résultat identique au minimax complet, jamais différent.</td></tr>
+          <tr><td><strong>PVS / negascout</strong></td><td>Le premier coup vient de la table, les suivants sont a priori moins bons : une fenêtre nulle suffit à le confirmer et ne coûte presque rien. On ne re-cherche en fenêtre pleine que si l'hypothèse est fausse.</td></tr>
+          <tr><td><strong>Table de transposition</strong></td><td>2²¹ entrées indexées par un hachage de Zobrist, qui inclut le trait <em>et</em> l'éventuel cinq en attente (chapitre 8) — deux positions de valeurs différentes ne doivent pas partager une entrée.</td></tr>
+          <tr><td><strong>Iterative deepening</strong></td><td>On approfondit tant que le budget tient. Le meilleur coup du pli N−1 est essayé en premier au pli N, ce qui rend l'approfondissement bien moins cher qu'il n'en a l'air.</td></tr>
+          <tr><td><strong>Score de mat + profondeur</strong></td><td><span class="mono">MATE + depth</span> : entre deux victoires, préférer la plus rapide ; entre deux défaites, la plus lointaine.</td></tr>
+        </table>
       </div>
-      <p><span class="mono">depth</span> ici est la profondeur <em>restante</em> au moment où la victoire est trouvée. Une victoire trouvée près de la racine (beaucoup de profondeur restante) obtient un score légèrement plus élevé qu'une victoire trouvée très profondément dans l'arbre. Résultat : entre deux façons de gagner, le bot préfère toujours <strong>la plus rapide</strong> — un détail qui évite qu'il traîne une victoire déjà acquise.</p>
 
       <div class="callout">
-        <span class="callout-label">Point de soutenance</span>
-        Si on te demande "pourquoi minimax marche même si l'adversaire n'est pas parfait" — la réponse honnête : l'algorithme suppose un adversaire optimal par construction (c'est une garantie de robustesse, pas une prédiction). Contre un joueur imparfait, le bot ne perd jamais de terrain qu'il n'aurait pas dû céder ; il peut simplement rater des opportunités qu'un adversaire faible lui offre sans le vouloir — mais l'heuristique de motif (chapitre 4) capture déjà ces largesses dès qu'elles apparaissent sur le plateau.
+        <span class="callout-label">L'ordre de grandeur à connaître</span>
+        À branchement 40 et profondeur 4, le minimax pur demande environ 2,5 millions de nœuds ; alpha-bêta bien ordonné en demande environ 1 600. <strong>L'algorithme vaut plus que la représentation</strong> — et l'ordre des coups vaut presque autant que l'élagage, puisque c'est lui qui décide si l'élagage coupe tôt ou tard.
       </div>
     </section>
 
     <!-- ===================== CHAPITRE 6 ===================== -->
     <section class="chapter" id="ch6">
-      <div class="chapter-head"><span class="chapter-num">6</span><h2>La recherche en pratique</h2></div>
+      <div class="chapter-head"><span class="chapter-num">6</span><h2>Les candidats, et l'erreur que la mesure a corrigée</h2></div>
 
-      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Générer des coups : pas les 361 cases</h3>
-      <p>Explorer les 361 cases à chaque nœud serait absurde — la quasi-totalité du plateau est loin de toute pierre et n'a aucun intérêt tactique. <span class="mono">generateCandidates()</span> applique trois filtres en cascade :</p>
-      <ol>
-        <li><strong>Boîtes englobantes</strong> — ne scanner que les zones qui ont déjà vu des pierres (+1 case de marge), pas le plateau entier. Plusieurs rectangles disjoints plutôt qu'un seul : avec une boîte unique, deux échanges dans des coins opposés forceraient à scanner tout le vide entre les deux. Ils fusionnent dès qu'ils se recouvrent (<span class="mono">expandBox</span>).</li>
-        <li><strong>Voisinage</strong> — la case doit toucher une pierre existante (les 8 <span class="mono">SUBDIRECTIONS</span>).</li>
-        <li><strong>Score et coupe à 5</strong> — chaque candidat reçoit un score cheap (<span class="mono">localPatternScore</span> pour soi + 0.8× pour ce que ça bloque chez l'adversaire), et seuls les <span class="mono">MAX_BRANCH = 5</span> meilleurs sont gardés. C'est le filtre le plus décisif du moteur : un coup absent de ce top-5 n'est <em>jamais</em> exploré, quelle que soit la qualité de l'évaluation en profondeur.</li>
-      </ol>
-      <p>La légalité complète (<span class="mono">isLegalMove</span>, coûteuse car récursive) n'est vérifiée <strong>qu'à la racine</strong>. À l'intérieur de l'arbre, on explore des coups géométriquement plausibles sans revalider le double-trois à chaque nœud — seule la détection de victoire (toujours exacte) coupe réellement l'arbre. Compromis assumé : le coup <em>réellement joué</em> est toujours garanti légal ; une branche hypothétique profonde peut, dans de rares cas, explorer un coup qui aurait été interdit s'il avait été proposé pour de vrai.</p>
+      <p>361 cases, mais on n'en explore que six par nœud. Deux étapes : <strong>filtrer</strong> (seules les cases vides adjacentes à une pierre sont candidates — de 21 à 26 en milieu de partie), puis <strong>trier</strong> et ne garder que les <span class="mono">maxBranch</span> premières.</p>
 
-      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Iterative deepening</h3>
-      <p>Plutôt que de lancer directement une recherche à profondeur 10 (qui peut dépasser le budget), le bot cherche à profondeur 1, puis 2, puis 3… en gardant à chaque fois le meilleur coup de la <strong>dernière profondeur entièrement terminée</strong>. Si le temps s'épuise en pleine profondeur 8, le résultat de la profondeur 7 (complète) est conservé — jamais un résultat à moitié calculé.</p>
-      <div class="code-wrap">
-        <span class="code-label">main.cpp — boucle principale</span>
-        <pre class="code">for (int depth = 1; depth &lt;= MAX_DEPTH; depth++) {
-    try {
-        auto [move, score] = rootSearch(state, depth);
-        bestMove = move; depthReached = depth;
-        if (score >= MATE_SCORE) break;   <span class="c">// victoire certaine trouvée, inutile de creuser plus</span>
-    } catch (SearchAborted&amp;) { break; }    <span class="c">// budget de temps épuisé en cours de calcul</span>
-}</pre>
+      <div class="callout">
+        <span class="callout-label">Le paramètre le plus sensible du moteur</span>
+        Un coup absent de cette liste n'est <strong>jamais</strong> exploré, quelle que soit la profondeur atteinte derrière. Tout le reste du moteur repose sur la qualité de ce tri — et sur sa largeur.
       </div>
-      <p>Bénéfice caché : la profondeur N réutilise le meilleur coup trouvé à la profondeur N-1 (via la table de transposition) pour trier ses candidats en premier — une recherche profonde qui commence par le coup probablement le meilleur coupe beaucoup plus tôt avec alpha-bêta.</p>
 
-      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">La table de transposition (Zobrist)</h3>
-      <p>Deux ordres de coups différents peuvent mener exactement à la même position (jouer A puis B, ou B puis A). Sans mémoire, le moteur ré-explorerait cette position depuis zéro à chaque fois. Le hash de Zobrist résout ça : une clé aléatoire fixe par (case, couleur), XORée à chaque pose/retrait, donne un identifiant 64 bits de la position, maintenu incrémentalement en O(1) par coup (jamais recalculé en entier).</p>
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Combien de candidats ? La largeur contre la profondeur</h3>
+      <p>Chaque cran de largeur coûte un pli : douze plis à cinq candidats, onze à six, dix à sept. On échange donc de la profondeur contre de l'étendue, et seul le jeu peut dire lequel vaut mieux. Quarante parties par comparaison, ouvertures appariées :</p>
+
       <div class="tbl-wrap">
         <table class="tbl">
-          <tr><th>Drapeau TT</th><th>Signification</th></tr>
-          <tr><td><span class="mono">Exact</span></td><td>le score stocké est la vraie valeur de la position</td></tr>
-          <tr><td><span class="mono">Lower</span></td><td>coupure béta : la vraie valeur est <em>au moins</em> ce score</td></tr>
-          <tr><td><span class="mono">Upper</span></td><td>aucun coup n'a dépassé alpha : la vraie valeur est <em>au plus</em> ce score</td></tr>
+          <tr><th>Comparaison</th><th>Score</th><th>Paires décisives</th><th>Temps moyen</th><th>Coups &gt; 500 ms</th></tr>
+          <tr><td>largeur 5</td><td>référence</td><td>—</td><td class="num">374 ms</td><td class="num">0 / 36</td></tr>
+          <tr><td>largeur 6 contre 5</td><td class="num">72,5 %</td><td>10 / 11 &nbsp; (p = 0,006)</td><td class="num">384 ms</td><td class="num">0 / 36</td></tr>
+          <tr><td>largeur 7 contre 5</td><td class="num">75,0 %</td><td>11 / 12 &nbsp; (p = 0,003)</td><td class="num">426 ms</td><td class="num">4 / 36</td></tr>
+          <tr><td>largeur 7 contre 6</td><td class="num">50,0 %</td><td>4 / 8 &nbsp; (p = 0,64)</td><td>—</td><td>—</td></tr>
+          <tr><td>largeur 8</td><td>—</td><td>—</td><td class="num">551 ms</td><td class="num">14 / 36 — hors critère</td></tr>
         </table>
       </div>
-      <p>2²¹ (≈ 2 millions) entrées, remplacement systématique (pas de politique complexe) : à cette échelle, l'essentiel du gain vient déjà du simple fait d'éviter le travail dupliqué.</p>
+
+      <p>Élargir est le levier le plus rentable du moteur, mais il sature : sept ne bat plus six. C'est donc le <strong>critère de temps</strong> qui tranche entre les deux — sept passe encore sur la moyenne, qui est ce que demande le sujet, mais fait sortir quatre coups du budget sans rien rapporter en jeu. <strong>Six gagne la même force sans jamais dépasser.</strong></p>
+
+      <div class="callout">
+        <span class="callout-label">« 384 ms de moyenne, pourquoi ne pas en profiter ? »</span>
+        La question se pose, et la réponse est mesurée : <strong>cette marge n'existe pas vraiment</strong>. La moyenne est basse parce que les coups faciles finissent en quelques millisecondes ; les coups difficiles consomment déjà tout leur budget. La dépenser signifie donc allonger ces coups-là. Porter le budget de 460 à 560 ms fait passer <strong>25 coups sur 36 au-dessus de 500 ms</strong> pour une moyenne à 471 ms — et ne rapporte rien : 47,5 % en A/B sur 40 parties, p = 0,81. La raison tient à l'approfondissement itératif, qui est tout ou rien : 22 % de temps en plus donnent 23 % de nœuds en plus mais <em>pas un pli de plus</em>, et une profondeur commencée puis interrompue est jetée. Du temps qui n'achète pas un pli entier n'achète rien.
+      </div>
+
+      <div class="callout">
+        <span class="callout-label">Pourquoi ce moteur peut se payer six et <span class="mono">main</span> non</span>
+        Le réglage de <span class="mono">main</span> est cinq, parce que six l'y faisait sortir du budget. C'est exactement le rendement du chapitre précédent qui achète la largeur ici : le tri sans copie d'état a rendu 23 % de nœuds, et cette marge se dépense en candidats. Une optimisation ne vaut que par ce qu'elle permet d'acheter.
+      </div>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">La version élégante, et pourquoi elle était mauvaise</h3>
+      <p>Le tri notait chaque coup <em>en le jouant</em> : <span class="mono">-after(p).evaluate()</span>. Élégant — l'heuristique note le coup sans code de notation dupliqué — mais chaque appel copiait les 3 272 octets de l'état et mettait à jour quatre <span class="mono">CountBoard</span>, pour chacun des 21 à 26 candidats, alors que la recherche n'en développe que cinq. Les copies du tri étaient <em>toutes</em> jetées.</p>
+
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <tr><th>Binaire</th><th>Nœuds en 460 ms</th><th>Lecture</th></tr>
+          <tr><td>tri en jouant le coup</td><td class="num">81 664</td><td>l'ancienne version</td></tr>
+          <tr><td>tri entièrement neutralisé</td><td class="num">167 296</td><td>ce que la représentation sait faire</td></tr>
+          <tr><td><span class="mono">main</span> (moteur scalaire)</td><td class="num">125 184</td><td>la référence</td></tr>
+        </table>
+      </div>
+
+      <p>Le tri consommait <strong>plus de la moitié du budget</strong>. Tout l'avantage de la représentation bitboard y passait, et un peu plus : la fusion était 35 % <em>sous</em> le moteur scalaire.</p>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Le correctif : chiffrer sans jouer</h3>
+      <p>Il n'y a pas besoin de jouer le coup pour connaître son delta — ce sont exactement les deux termes de <span class="mono">place()</span> appliqués à un score temporaire. <span class="mono">CountBoard::score()</span> devient <span class="mono">const</span> (elle ne lit que <span class="mono">digits</span>, tout son effet passant par l'updater), et <span class="mono">moveDelta()</span> ne copie rien.</p>
+
+      <div class="code-wrap">
+        <span class="code-label">bot/src/Gomoku.cpp — Gomoku::moveDelta()</span>
+        <pre class="code">score_t tmp{};
+p0lines.score( vec::compute(p1lines.of(0) &amp; line), tmp.upgrade_updater(P) );
+p1lines.score( vec::compute(p0lines.of(0) &amp; line), tmp.block_updater(P)   );
+return tmp.raw();</pre>
+      </div>
+
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <tr><th>Version</th><th>Nœuds en 460 ms</th><th>Profondeur</th></tr>
+          <tr><td>tri en jouant le coup</td><td class="num">80 768</td><td class="num">11</td></tr>
+          <tr><td>tri par <span class="mono">moveDelta</span></td><td class="num">99 328</td><td class="num">12</td></tr>
+        </table>
+      </div>
+
+      <p>+23 % de nœuds et un pli, pour une quinzaine de lignes. La leçon n'est pas « il fallait optimiser » : c'est qu'<strong>un raffinement peut coûter davantage que ce qu'il rapporte, et que seule la mesure le dit</strong>. La version élégante paraissait gratuite.</p>
+
+      <div class="callout">
+        <span class="callout-label">Attention au signe — le piège classique</span>
+        L'ancienne version écrivait <span class="mono">-after(p).evaluate()</span>. La négation était indispensable : <span class="mono">after(p)</span> est la position <em>après</em> mon coup, donc <span class="mono">evaluate()</span> y rend le point de vue de l'ADVERSAIRE. Sans elle, le tri est exactement inversé et le bot rate un cinq immédiat — ce qui est arrivé, avant que le test d'ordre existe. <span class="mono">moveDelta</span> rend le point de vue explicite et le piège disparaît, mais le test est resté.
+      </div>
     </section>
 
     <!-- ===================== CHAPITRE 7 ===================== -->
     <section class="chapter" id="ch7">
-      <div class="chapter-head"><span class="chapter-num">7</span><h2>Profondeur garantie &amp; budget de temps</h2></div>
+      <div class="chapter-head"><span class="chapter-num">7</span><h2>Le VCF : la profondeur qu'on ne peut pas acheter</h2></div>
 
-      <div class="quote-subject">
-        <span class="callout-label">Le sujet dit</span>
-        « Votre IA doit chercher au moins 10 niveaux de profondeur dans son arbre de jeu. » — et séparément — « Si votre IA prend plus d'une demi-seconde <em>en moyenne</em> pour trouver un coup, vous ne validerez pas le projet. »
+      <p>La recherche voit douze plis. Un adversaire la bat en montant une séquence forcée qui se dénoue plus loin : chaque coup crée un quatre, il n'y a qu'une réponse, et la conclusion arrive au-delà de l'horizon. Le bot joue alors le coup qui paraît le meilleur juste avant de se faire piéger.</p>
+
+      <p>Le <strong>VCF</strong> (victoire par fours consécutifs) n'explore <em>que</em> les coups forçants. Le branchement tombe de 5 à 1-3, ce qui permet de descendre deux à trois fois plus profond pour une fraction du coût. Élargir la recherche principale, au contraire, sort du budget.</p>
+
+      <div class="callout">
+        <span class="callout-label">La règle de sûreté, la plus importante du fichier</span>
+        L'ensemble des réponses adverses doit être un <strong>SUR-ensemble</strong> des défenses réelles, jamais un sous-ensemble. Rater une défense ferait annoncer une victoire forcée qui n'existe pas : le bot jouerait la séquence et perdrait. Rater une victoire n'est qu'une occasion manquée. Les deux erreurs ne se valent pas, et tout le fichier est écrit dans ce sens — quand le budget de nœuds s'épuise, on conclut que <em>la défense tient</em>.
       </div>
 
-      <p>Ces deux contraintes sont en tension : une position calme et ouverte (peu de menaces, donc peu de coupures alpha-bêta) peut demander beaucoup plus de temps pour atteindre le pli 10 qu'une position tactique dense. Le compromis retenu utilise deux budgets de temps différents selon la profondeur :</p>
+      <p>Ce jeu de règles complique le VCF classique : un quatre n'y est pas forçant au sens habituel, puisque l'adversaire peut aussi <strong>capturer</strong> une paire de l'alignement pour le casser. D'où un ensemble de réponses volontairement large : la case qui compléterait le cinq, un coup qui gagne pour le défenseur, et <em>toute</em> capture — même sans rapport apparent avec l'alignement.</p>
 
-      <div class="code-wrap">
-        <span class="code-label">main.cpp</span>
-        <pre class="code">deadline = start + (depth &lt;= MIN_DEPTH ? HARD_BUDGET : TIME_BUDGET);
-<span class="c">// MIN_DEPTH = 10, HARD_BUDGET = 800ms, TIME_BUDGET = 460ms</span></pre>
-      </div>
-      <ul>
-        <li>Pour atteindre les profondeurs 1 à 10, le bot dispose d'un plafond élargi (800ms) — qui évite qu'une position dense ne coupe la recherche avant le pli 10 exigé, sans laisser filer le temps de réponse loin de la demi-seconde visée.</li>
-        <li>Au-delà du pli 10, c'est le vrai budget (460ms, sous les 500ms imposés) qui s'applique — chercher plus loin est un bonus de qualité, pas une obligation.</li>
-      </ul>
-      <p>Pour que ce plafond reste rarement sollicité, <span class="mono">MAX_BRANCH</span> a été réduit de 8 à 6 puis à 5 : moins de branches par nœud, donc le pli 10 est atteint avant le plafond dans l'immense majorité des positions.</p><div class="callout"><span class="callout-label">Marge réelle</span>Le plafond était initialement à 1500ms ; il a été ramené à <strong>800ms</strong> pour ne pas s'éloigner de la moyenne de 500ms exigée. La contrepartie est une marge devenue mince : sur les positions mesurées, le temps de réponse va de 460ms (cas normal, budget atteint) jusqu'à <strong>~690ms</strong> en milieu de partie dense — soit une centaine de millisecondes sous le plafond. Un enrichissement supplémentaire de l'heuristique consommerait cette marge : c'est la contrainte à surveiller avant d'ajouter quoi que ce soit à <span class="mono">evaluate()</span>.</div>
+      <p>Les gains immédiats sont <strong>confirmés en jouant le coup</strong> : <span class="mono">wouldWin()</span> lit les fenêtres et ignore l'overline non gagnant comme la victoire différée, alors que <span class="mono">play()</span> applique les règles exactement. Annoncer une victoire qu'on n'a pas est la seule erreur que ce fichier ne doit jamais commettre.</p>
 
-      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Le timer affiché à l'écran</h3>
-      <p>Exigence non négociable du sujet ("no timer, no project validation"). Le temps est mesuré côté serveur (<span class="mono">route.ts</span>, autour de l'appel au binaire), transmis au frontend, et affiché en direct dans l'interface pendant que le bot réfléchit.</p>
-      <div class="code-wrap">
-        <span class="code-label">route.ts → page.tsx</span>
-        <pre class="code">const startTime = Date.now()
-const result = execSync("./Gomoku", { ... })
-const time = Date.now() - startTime
-<span class="c">// affiché ensuite : `${botResponseMs} ms`</span></pre>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <tr><th>Mesure sur une partie complète (911110)</th><th>Résultat</th></tr>
+          <tr><td>Nœuds VCF par coup</td><td class="num">1 en moyenne, 3 au maximum</td></tr>
+          <tr><td>Plafond de 120 000 nœuds atteint</td><td>jamais</td></tr>
+          <tr><td>Victoires forcées trouvées</td><td class="num">2 sur 13 coups analysés</td></tr>
+        </table>
       </div>
+
+      <p>Autrement dit : <strong>gratuit, et il sert</strong>. Sur une position ordinaire il conclut en un nœud qu'il n'y a rien de forçant ; sur un three ouvert il trouve la victoire en trois.</p>
     </section>
 
     <!-- ===================== CHAPITRE 8 ===================== -->
     <section class="chapter" id="ch8">
-      <div class="chapter-head"><span class="chapter-num">8</span><h2>Questions probables en soutenance</h2></div>
+      <div class="chapter-head"><span class="chapter-num">8</span><h2>Les règles</h2></div>
+
+      <p>Les règles sont lues <strong>à l'exécution</strong>, sur la première ligne de <span class="mono">stdin</span>. L'alternative — un binaire compilé par combinaison de règles — était incompatible avec une interface web qui les laisse configurer.</p>
+
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <tr><th>Index</th><th>Règle</th><th>Valeurs</th></tr>
+          <tr><td class="num">0</td><td>taille de grille</td><td><span class="mono">'5'</span> = 15×15, <span class="mono">'9'</span> = 19×19</td></tr>
+          <tr><td class="num">1</td><td>capture</td><td><span class="mono">'0'</span> / <span class="mono">'1'</span></td></tr>
+          <tr><td class="num">2</td><td>capture de fin de partie (cinq imparfait)</td><td><span class="mono">'0'</span> / <span class="mono">'1'</span></td></tr>
+          <tr><td class="num">3</td><td>overline</td><td><span class="mono">'1'</span> gagne, <span class="mono">'0'</span> légal sans gagner, <span class="mono">'f'</span> interdit, <span class="mono">'b'</span> interdit à noir / gagnant pour blanc (Renju)</td></tr>
+          <tr><td class="num">4</td><td>double-trois interdit</td><td><span class="mono">'0'</span> / <span class="mono">'1'</span> / <span class="mono">'b'</span> (noir seulement)</td></tr>
+          <tr><td class="num">5</td><td>double-quatre interdit</td><td><span class="mono">'0'</span> / <span class="mono">'1'</span> / <span class="mono">'b'</span></td></tr>
+        </table>
+      </div>
+
+      <p>Les deux moteurs interprètent cette ligne exactement pareil, y compris les variantes asymétriques. Ce n'est pas un détail de confort : sans ça, un match entre eux ne mesurerait pas la force, mais un désaccord sur les règles.</p>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">La capture, et son inverse</h3>
+      <p>Le motif est <span class="mono">moi, adversaire, adversaire, moi</span> dans une des huit directions : la paire du milieu est retirée. Retirer une pierre demande l'inverse exact de <span class="mono">place()</span>, et l'ordre des opérations compte — il faut d'abord défaire le comptage pour retrouver les masques d'avant la pose. Comme <span class="mono">sign<sub>!P</sub> = −sign<sub>P</sub></span>, passer <span class="mono">!P</span> aux mêmes updaters donne le terme opposé, sans code supplémentaire.</p>
+
+      <div class="callout">
+        <span class="callout-label">L'oracle qui rend l'erreur impossible à ignorer</span>
+        Une erreur dans <span class="mono">unplace()</span> serait <strong>silencieuse</strong> : le score dériverait peu à peu de la position réelle, et le bot jouerait de plus en plus mal sans que rien ne plante. Le score étant une somme sur les fenêtres, donc une fonction pure de la position, <span class="mono">tests/capture_test.cpp</span> reconstruit un plateau de zéro avec les mêmes pierres et exige le <em>même</em> score au bit près.
+      </div>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">La victoire différée, la seule règle qui dépend de l'histoire</h3>
+      <p>Avec <span class="mono">captureUnperfect</span>, un cinq dont une pierre appartient à une paire capturable ne gagne pas tout de suite : il gagne s'il <strong>survit au coup adverse</strong>. « Ce cinq gagne-t-il ? » ne se lit donc pas sur la position seule.</p>
+      <p>D'où un changement d'architecture : l'issue est décidée par <span class="mono">play()</span> et mémorisée, au lieu d'être recalculée à chaque nœud sur huit <span class="mono">CountBoard</span>. <span class="mono">is_over()</span> et <span class="mono">winner()</span> deviennent une comparaison. Le hachage porte un bit pour le cinq en attente, faute de quoi la table de transposition confondrait deux positions de valeurs différentes.</p>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Légalité : à la racine, et seulement là</h3>
+      <p>Le double-trois, le double-quatre et l'overline interdit demandent une détection de menaces récursive. La faire à chaque nœud coûterait cette détection par candidat, des centaines de milliers de fois — pour rien, puisque la recherche ne fait qu'<em>estimer</em>. Seul le coup <strong>réellement rendu</strong> doit être légal : le filtre s'applique à la racine, et la sortie du VCF est validée séparément.</p>
+
+      <p>Cette détection est portée telle quelle depuis <span class="mono">main</span>, scalaire et assumée. Elle y avait été auditée et corrigée de deux bugs — alignements comptés deux fois (huit directions au lieu de quatre axes, ce qui faisait voir un double-trois dans tout trois simple), et confusion overline/O4/C4. La réécrire en bitboards aurait coûté le temps de l'écrire <em>et</em> de refaire les mêmes erreurs, là où elle ne pèse rien.</p>
+
+      <div class="code-wrap">
+        <span class="code-label">vérification de bout en bout — noir peut jouer (7,7), qui serait un double-trois</span>
+        <pre class="code">911110  (double-trois interdit)  →  le bot joue 9:8
+911100  (règle désactivée)       →  le bot joue 7:7</pre>
+      </div>
+    </section>
+
+    <!-- ===================== CHAPITRE 9 ===================== -->
+    <section class="chapter" id="ch9">
+      <div class="chapter-head"><span class="chapter-num">9</span><h2>Mesurer plutôt que croire</h2></div>
+
+      <p>Les nœuds par seconde et la profondeur atteinte ne disent rien sur la force de jeu. Le seul verdict qui compte : <strong>la nouvelle version bat-elle l'ancienne ?</strong> D'où <span class="mono">tools/selfplay.py</span>.</p>
+
+      <p>Deux précautions, et elles ne sont pas décoratives : <strong>ouvertures tirées au sort</strong> (les moteurs sont déterministes, sinon N parties seraient N copies de la même) et <strong>ouvertures appariées, couleurs inversées</strong> (sinon on mesure surtout l'avantage du premier joueur, qui est énorme au Gomoku).</p>
+
+      <div class="callout">
+        <span class="callout-label">Le piège de la taille d'échantillon</span>
+        Sur 12 parties, l'écart-type d'un score est de <strong>14 points de pourcentage</strong> : un résultat à 40 % ne prouve rien. Pire — dans certaines configurations, noir gagne presque toujours, et comme les ouvertures sont appariées, une paire où noir gagne <em>deux fois</em> rapporte un point à chacun. Sur six paires, il peut n'en rester qu'<strong>une</strong> qui départage. On croit lire une différence de force ; on lit une partie. Toujours regarder le nombre de paires décisives, pas seulement le score.
+      </div>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Vérifier l'instrument avant de lire la mesure</h3>
+      <p>Un match où un moteur joue des coups que l'autre juge illégaux ne mesure pas la force : il mesure un désaccord sur les règles. Deux contrôles avant de croire le score :</p>
+      <ul>
+        <li><strong>Accord sur l'état</strong> — on rejoue des parties complètes en demandant l'issue aux deux binaires à chaque demi-coup : <strong>118 positions, 0 désaccord</strong>.</li>
+        <li><strong>Arbitre indépendant</strong> — un binaire construit sur le moteur de règles de <span class="mono">main</span> revalide chaque coup : <strong>6 parties, 142 coups, 0 illégal</strong>.</li>
+      </ul>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Le résultat qu'il ne fallait pas croire</h3>
+      <p>Premier verdict, 40 parties contre le moteur de <span class="mono">main</span> au préréglage réel <span class="mono">911110</span> : <strong>92,5 %</strong>, dix-sept paires décisives sur dix-sept. Un écart pareil ne s'explique pas par une heuristique un peu meilleure. Un score trop beau est un symptôme, pas une récompense.</p>
+
+      <p>Le même match aux règles <span class="mono">910100</span> donnait 55 %, sans signification. Deux règles distinguent ces jeux ; en les activant une par une, à graine et adversaire identiques :</p>
+
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <tr><th>Règles</th><th>Capture de fin de partie</th><th>Double-trois</th><th>Score</th><th>Paires décisives</th></tr>
+          <tr><td><span class="mono">910100</span></td><td>—</td><td>—</td><td class="num">45,0 %</td><td>4 / 10 &nbsp; (p = 0,83)</td></tr>
+          <tr><td><span class="mono">910110</span></td><td>—</td><td>oui</td><td class="num">52,5 %</td><td>6 / 11 &nbsp; (p = 0,50)</td></tr>
+          <tr><td><span class="mono">911100</span></td><td><strong>oui</strong></td><td>—</td><td class="num">90,0 %</td><td>16 / 16 &nbsp; (p ≈ 0)</td></tr>
+          <tr><td><span class="mono">911110</span></td><td>oui</td><td>oui</td><td class="num">92,5 %</td><td>17 / 17 &nbsp; (p ≈ 0)</td></tr>
+        </table>
+      </div>
+
+      <p>Le double-trois ne change rien. <strong>Tout l'écart tient à une seule règle</strong> — et une règle n'a aucune raison de rendre un moteur quatre fois meilleur. Une position suffit à voir pourquoi : noir a un cinq en <span class="mono">(5,5)-(9,5)</span> dont une paire est prenable, donc blanc ne survit qu'en capturant.</p>
+
+      <div class="code-wrap">
+        <span class="code-label">le même coup demandé aux deux moteurs</span>
+        <pre class="code">fusion  →  5:7   profondeur 14, 14 353 nœuds   <span class="c">capture, casse le cinq</span>
+main    →  4:5   profondeur  1,      6 nœuds   <span class="c">bloque une extrémité — inutile</span></pre>
+      </div>
+
+      <p>Six nœuds : la recherche adverse s'arrêtait aussitôt, persuadée d'avoir trouvé un mat <em>en sa faveur</em>. Son négamax notait tout coup suivi d'une victoire comme gagnant pour celui qui vient de jouer, sans lire <span class="mono">outcome.winner</span>. C'est vrai partout, sauf sous cette règle : un cinq adverse en attente se confirme quand le coup ne le casse pas, et la victoire revient alors à l'<em>adversaire</em>. Le moteur notait donc le coup qui perd comme un mat gagnant.</p>
+
+      <p>Deux lignes corrigent le calcul. Le même match, contre l'adversaire réparé :</p>
+
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <tr><th>Adversaire, règles <span class="mono">911100</span>, 40 parties</th><th>Score</th><th>Paires décisives</th><th>Verdict</th></tr>
+          <tr><td><span class="mono">main</span> tel quel</td><td class="num">90,0 %</td><td>16 / 16</td><td>différence établie</td></tr>
+          <tr><td><span class="mono">main</span> corrigé</td><td class="num">50,0 %</td><td>5 / 10 &nbsp; (p = 0,62)</td><td>parité exacte</td></tr>
+        </table>
+      </div>
+
+      <p style="font-size:1.05rem;"><strong>Les 92,5 % ne mesuraient pas une supériorité : ils mesuraient un bug chez l'adversaire.</strong> Contre l'adversaire réparé, à réglages identiques, les deux moteurs se valaient exactement.</p>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Le vrai gain, et d'où il vient</h3>
+      <p>La parité obtenue contre <span class="mono">main</span> corrigé est le point de départ honnête, pas la conclusion. Ce qui départage ensuite, c'est la <strong>largeur de recherche</strong> (chapitre 6) — six candidats au lieu de cinq, que ce moteur peut se payer parce que son tri ne copie plus l'état :</p>
+
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <tr><th>Contre <span class="mono">main</span> corrigé, <span class="mono">911110</span>, 40 parties</th><th>Score</th><th>Paires décisives</th><th>Verdict</th></tr>
+          <tr><td>à largeur 5, comme <span class="mono">main</span></td><td class="num">50,0 %</td><td>5 / 10 &nbsp; (p = 0,62)</td><td>parité exacte</td></tr>
+          <tr><td><strong>à largeur 6</strong></td><td class="num">72,5 %</td><td>10 / 11 &nbsp; (p = 0,006)</td><td>différence établie</td></tr>
+        </table>
+      </div>
+
+      <p>Le moteur est donc bien plus fort, mais la raison n'est ni la représentation bitboard ni l'heuristique : c'est <strong>un demi-candidat de plus par nœud, acheté avec le rendement d'une optimisation</strong>. Dit autrement — à réglages égaux, les deux approches se valent ; ce qui les sépare, c'est ce que l'une peut se permettre et l'autre pas.</p>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Le reste des mesures</h3>
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <tr><th>Mesure</th><th>Résultat</th><th>Lecture</th></tr>
+          <tr><td>Termes de menace, A/B groupé, 40 parties</td><td class="num">62,5 %</td><td>5 paires décisives sur 5, p = 0,031</td></tr>
+          <tr><td>… mais chacun pris seul</td><td class="num">47,5 % et 55,0 %</td><td>p = 0,81 et 0,34 : rien d'établi. Le terme de paires capturables coûte 11 % du débit sans gain mesurable — conservé pour la complétude de l'heuristique, en connaissance de cause</td></tr>
+          <tr><td>Profondeur à <span class="mono">911110</span></td><td class="num">12 plis, 81 280 nœuds</td><td><span class="mono">main</span> : 11 plis pour 129 920 nœuds</td></tr>
+          <tr><td>Temps par coup, partie complète</td><td class="num">378 ms de moyenne</td><td>0 coup sur 36 au-dessus de 500 ms</td></tr>
+          <tr><td>Victoire contre un adversaire faible</td><td class="num">8 / 8, 5,6 tours de moyenne</td><td>critère « moins de 20 tours » tenu</td></tr>
+          <tr><td>Tests</td><td class="num">119 vérifications, 0 échec</td><td>recherche 55, moteur 25, captures 16, règles 23</td></tr>
+        </table>
+      </div>
+
+      <p>La ligne la plus instructive est celle de la profondeur : le moteur atteint <strong>un pli de plus que <span class="mono">main</span> avec 37 % de nœuds en moins</strong>. Il n'est pas plus rapide par nœud — il en a moins besoin, parce que son ordre de coups est meilleur. C'est exactement ce que promet l'alpha-bêta : à branchement égal, l'ordre décide de tout.</p>
+
+      <div class="callout">
+        <span class="callout-label">Précision de méthode</span>
+        Tous les chiffres de ce carnet viennent de la même machine (Intel i7-12700, GCC 16.2.1, exécution native). Une mesure de temps prise sous émulation n'est pas comparable — elle a d'ailleurs, un temps, fait croire l'inverse de la vérité sur le débit. Et une mesure de <em>force</em> prise avant la correction du chapitre 3 ne vaut rien : un moteur qui punit sa propre défense ne joue pas le jeu qu'on croit mesurer.
+      </div>
+    </section>
+
+    <!-- ===================== CHAPITRE 10 ===================== -->
+    <section class="chapter" id="ch10">
+      <div class="chapter-head"><span class="chapter-num">10</span><h2>Questions probables en soutenance</h2></div>
 
       <div class="qa">
-        <div class="q">Pourquoi négamax et pas minimax "à deux fonctions" ?</div>
-        <div class="a"><p>Parce que Gomoku est symétrique à somme nulle : mon gain est exactement la perte de l'adversaire. Une seule fonction qui maximise toujours du point de vue du joueur au trait, avec un signe inversé à chaque appel récursif, produit le même résultat que deux fonctions min/max séparées — avec moitié moins de code à maintenir et à expliquer.</p></div>
+        <div class="q">Pourquoi des bitboards plutôt qu'un tableau de cases ?</div>
+        <div class="a"><p>Parce que les opérations dont le moteur a besoin — « combien de pierres dans cette fenêtre », « cette fenêtre est-elle vivante » — deviennent des opérations bit à bit sur sept entiers, au lieu de boucles sur des cases. Et surtout parce que le score se maintient <em>par différence</em> : poser une pierre coûte une poignée d'opérations, indépendamment de la longueur des alignements concernés.</p></div>
       </div>
       <div class="qa">
-        <div class="q">L'élagage alpha-bêta change-t-il le résultat par rapport à un minimax complet ?</div>
-        <div class="a"><p>Non, jamais. Il ne coupe que des branches dont on peut prouver qu'elles ne changeront pas la décision finale à la racine. C'est une optimisation de vitesse pure, à résultat identique.</p></div>
+        <div class="q">Vous comptez des fenêtres, pas des alignements. Qu'est-ce que ça change ?</div>
+        <div class="a"><p>Un alignement doit être parcouru, avec ses cas particuliers : extrémités bloquées, trous, chevauchements. Une fenêtre est un objet fixe — il y en a 1 020, connues d'avance — et on ne fait que compter les pierres qu'elle contient. Les motifs cassés comme <span class="mono">XX.XX</span> tombent tout seuls. En contrepartie le modèle est linéaire en l'ouverture, et il faut lui ajouter explicitement la différence entre un four ouvert et un four bloqué : c'est le chapitre 4.</p></div>
       </div>
       <div class="qa">
-        <div class="q">Comment garantissez-vous exactement 10 plis, tout le temps ?</div>
-        <div class="a"><p>Un budget de temps généreux (1500ms) s'applique tant que la profondeur cible n'a pas atteint 10 ; le budget réel de 460ms ne s'applique qu'au-delà. Combiné à un branchement réduit (6 coups par nœud), le pli 10 est atteint bien avant ce plafond dans la quasi-totalité des positions testées.</p></div>
+        <div class="q">Alpha-bêta change-t-il le résultat par rapport à un minimax complet ?</div>
+        <div class="a"><p>Jamais. Il ne coupe que des branches dont on peut prouver qu'elles ne changeront pas la décision à la racine. C'est exactement ce que vérifie <span class="mono">search_test</span>, en comparant le coup choisi à la valeur minimax de la position.</p></div>
       </div>
       <div class="qa">
-        <div class="q">Pourquoi ne pas vérifier la légalité complète (double-trois) à chaque nœud de l'arbre ?</div>
-        <div class="a"><p>C'est une vérification récursive, donc coûteuse — se la payer à chaque nœud interdirait d'atteindre la profondeur 10 dans le budget imposé. Le compromis : elle est garantie exacte à la racine (le coup réellement joué est toujours 100% légal), et la détection de victoire/nulle en profondeur reste toujours exacte — seule l'hypothèse "ce coup imaginaire, s'il était vraiment joué, serait-il un double-trois interdit ?" est laissée de côté au fond de l'arbre.</p></div>
+        <div class="q">Comment garantissez-vous au moins 10 plis ?</div>
+        <div class="a"><p>Deux budgets. Jusqu'au pli 10, le plafond est de 800 ms : la recherche a le droit de dépasser le budget nominal pour l'atteindre. Au-delà, le budget de 460 ms s'applique. L'horloge est consultée un nœud sur 128 — la consulter à chaque nœud coûterait plus cher que la recherche.</p></div>
       </div>
       <div class="qa">
-        <div class="q">Pourquoi un bonus quadratique sur les captures dans l'heuristique ?</div>
-        <div class="a"><p>Pour que l'urgence de la victoire par capture (10 pierres) croisse avec la proximité du seuil, sans code spécial. Le carré fait que passer de 8 à 10 captures pèse bien plus lourd que passer de 0 à 2, ce qui reflète la réalité du jeu : à 8 captures, une seule paire de plus gagne la partie.</p></div>
+        <div class="q">Votre bot respecte-t-il les 500 ms ?</div>
+        <div class="a"><p>Oui, mesuré sur une partie complète et pas sur une position choisie : 378 ms de moyenne, aucun coup au-dessus de 500 ms sur 36. Le critère du sujet porte sur la moyenne — les premiers coups sont quasi gratuits, ceux du milieu consomment le budget entier.</p></div>
       </div>
       <div class="qa">
-        <div class="q">Comment la table de transposition évite-t-elle les collisions ?</div>
-        <div class="a"><p>Elle ne les évite pas complètement — c'est une table à taille fixe (2²¹ entrées) avec remplacement systématique. Chaque entrée stocke aussi la clé complète (64 bits), donc une collision d'index (deux positions différentes tombant sur la même case de la table) est détectée en comparant les clés avant d'utiliser l'entrée — elle n'est jamais utilisée à tort, seulement pas retrouvée si elle a été écrasée entre-temps.</p></div>
+        <div class="q">Racontez-moi un bug que vous avez trouvé chez quelqu'un d'autre.</div>
+        <div class="a"><p>Le moteur adverse notait tout coup suivi d'une victoire comme gagnant pour celui qui vient de jouer — sans lire le champ <span class="mono">winner</span> que sa propre structure remplissait déjà. C'est correct partout, sauf sous la règle de capture de fin de partie, où un cinq en attente se confirme au profit de l'ADVERSAIRE. Il jouait donc le coup qui perd en croyant avoir trouvé un mat, et s'arrêtait à la profondeur 1. Deux lignes le corrigent, et un script fige la position pour que ça ne revienne pas.</p></div>
       </div>
       <div class="qa">
-        <div class="q">Que se passe-t-il si le bot n'a plus aucun coup légal ?</div>
-        <div class="a"><p><span class="mono">generateCandidates()</span> peut retourner une liste vide ; c'est vérifié explicitement avant de lancer la recherche (dans <span class="mono">main()</span>), pour ne jamais appeler <span class="mono">rootSearch()</span> sur une liste vide — ce qui garantit qu'aucun coup n'est renvoyé plutôt que de planter, conformément à l'exigence du sujet de ne jamais crasher.</p></div>
+        <div class="q">Racontez-moi un bug que vous avez trouvé chez vous.</div>
+        <div class="a"><p>Un signe inversé dans le terme de blocage : bloquer une menace dégradait l'évaluation de celui qui bloque. Rien ne plantait, le bot rendait toujours un coup légal. Ce qui a alerté, c'est le compteur de nœuds — 1 066 au lieu de plusieurs dizaines de milliers : la recherche croyait la partie perdue d'avance et coupait tout. Sur la position de test, le bot ignorait un quatre adverse et jouait dans un coin. C'est l'argument pour instrumenter le moteur même quand tout va bien.</p></div>
+      </div>
+      <div class="qa">
+        <div class="q">Une optimisation qui s'est révélée être une erreur ?</div>
+        <div class="a"><p>Le tri des candidats notait chaque coup en le jouant — élégant, aucun code de notation dupliqué. Mesuré, il consommait plus de la moitié du budget de recherche : la copie d'état, jetée aussitôt, coûtait plus que ce que la représentation faisait gagner. Le remplacer par un calcul de delta a rendu 23 % de nœuds et un pli. Rien ne le laissait deviner à la lecture.</p></div>
+      </div>
+      <div class="qa">
+        <div class="q">Pourquoi une recherche générique plutôt qu'un code écrit sur votre moteur ?</div>
+        <div class="a"><p>Parce que le moteur exige un compilateur avec la réflexion C++26, et que l'algorithme n'a besoin de rien. Séparés, ils se testent séparément : 55 vérifications de la recherche tournent en C++23 standard contre un état factice, sur n'importe quelle machine. Un bug d'alpha-bêta et un bug de bitboard ne se ressemblent pas — les confondre coûte des heures.</p></div>
+      </div>
+      <div class="qa">
+        <div class="q">Comment savez-vous que votre bot est meilleur, et pas seulement différent ?</div>
+        <div class="a"><p>72,5 % sur 40 parties contre l'autre moteur du projet, dix paires décisives sur onze, p = 0,006. Mais la première mesure disait 92,5 %, et c'est en refusant d'y croire que le résultat est devenu solide : cet écart-là tenait entièrement à un bug d'attribution de victoire chez l'adversaire, qu'il a fallu trouver et corriger avant de pouvoir mesurer quoi que ce soit. Une fois à égalité de code correct, les deux approches se valent exactement — et ce qui les sépare ensuite est identifié : un candidat de plus par nœud, que ce moteur peut se payer et l'autre pas.</p></div>
       </div>
     </section>
 
     <hr class="rule" />
     <footer class="doc-end">
-      Document de préparation personnelle — pas un livrable du projet. Toutes les références de code pointent vers <span class="mono">bot/src/main.cpp</span>, <span class="mono">bot/src/Gomoku.cpp</span> et <span class="mono">bot/inc/Gomoku.class.hpp</span> dans l'état actuel du dépôt.
+      Carnet de préparation — décrit la branche <span class="mono">merge-search</span> dans son état actuel. Références de code : <span class="mono">bot/inc/BitBoard.class.hpp</span>, <span class="mono">bot/inc/Gomoku.class.hpp</span>, <span class="mono">bot/inc/search.hpp</span>, <span class="mono">bot/inc/engine_state.hpp</span>, <span class="mono">bot/inc/vcf.hpp</span>, <span class="mono">bot/src/Gomoku.cpp</span>, <span class="mono">bot/src/main.cpp</span>. Chiffres mesurés sur Intel i7-12700, GCC 16.2.1, exécution native.
     </footer>
   </main>
 </div>
 
 <script>
 (function () {
-  // Dessine les mini-plateaux de l'échelle des menaces (chapitre 2) en JS
-  // pour rester DRY plutôt que de coder 3 x 6 cellules SVG à la main.
-  function drawRow(id, pattern) {
-    var g = document.getElementById(id);
-    if (!g) return;
-    var cell = 34, gap = 4;
-    pattern.forEach(function (v, i) {
-      var x = i * (cell + gap);
-      var rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-      rect.setAttribute("x", x); rect.setAttribute("y", 0);
-      rect.setAttribute("width", cell); rect.setAttribute("height", cell);
-      rect.setAttribute("rx", 6);
-      rect.setAttribute("fill", "var(--paper)");
-      rect.setAttribute("stroke", "var(--rule)");
-      g.appendChild(rect);
-      if (v) {
-        var c = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        c.setAttribute("cx", x + cell / 2); c.setAttribute("cy", cell / 2);
-        c.setAttribute("r", cell / 2 - 5);
-        c.setAttribute("fill", "var(--stone-black)");
-        g.appendChild(c);
-      }
-    });
-  }
-  drawRow("cellsA", [0,1,1,1,0,0]);
-  drawRow("cellsB", [0,1,1,1,1,0]);
-
   var links = Array.prototype.slice.call(document.querySelectorAll(".toc-link"));
   var sections = links.map(function (a) {
     return document.querySelector(a.getAttribute("href"));
