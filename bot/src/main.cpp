@@ -460,10 +460,15 @@ static int negamax(Gomoku &state, int depth, int alpha, int beta) {
 	bool first = true;
 	for (Pos m : moves) {
 		expandBox(m);
+		// Même correction qu'à la racine : voir rootSearch(). Le vainqueur
+		// rendu par applyMove peut être l'adversaire du joueur qui vient de
+		// jouer, quand un cinq en attente se confirme.
+		const bool mover = state.player();
 		Outcome outcome = state.applyMove(m);
 		int v;
 		if (outcome.state == Result::Win) {
-			v = MATE_SCORE + depth;
+			v = (outcome.winner == mover) ? MATE_SCORE + depth
+			                              : -(MATE_SCORE + depth);
 		} else if (outcome.state == Result::Draw) {
 			v = 0;
 		} else if (first) {
@@ -517,10 +522,17 @@ static std::pair<Pos,int> rootSearch(Gomoku &state, int depth) {
 	for (Pos m : moves) {
 		checkTime();
 		expandBox(m);
+		// Le vainqueur n'est PAS toujours celui qui vient de jouer : avec la
+		// règle de capture de fin de partie, un cinq adverse en attente se
+		// confirme quand ce coup ne le casse pas, et applyMove rend alors une
+		// victoire pour l'ADVERSAIRE. Compter MATE_SCORE sans regarder
+		// outcome.winner faisait noter comme gagnant le coup qui perd.
+		const bool mover = state.player();
 		Outcome outcome = state.applyMove(m);
 		int v;
 		if (outcome.state == Result::Win)
-			v = MATE_SCORE + depth;
+			v = (outcome.winner == mover) ? MATE_SCORE + depth
+			                              : -(MATE_SCORE + depth);
 		else if (outcome.state == Result::Draw)
 			v = 0;
 		else
