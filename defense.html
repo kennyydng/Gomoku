@@ -519,6 +519,24 @@ public:
 <span class="c">   ↑ P y a n pierres      ↑ l'adversaire n'y en a aucune</span></pre>
       </div>
 
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Deux bugs de géométrie, et l'invariant qui les a trouvés</h3>
+      <p>Encore faut-il que l'ensemble des fenêtres soit le bon. Il ne l'était pas, et rien ne le signalait : aucune assertion, aucun plantage — juste un moteur aveugle par endroits.</p>
+      <ul>
+        <li><strong>La convention d'index était inversée.</strong> Poser une pierre en <span class="mono">pos</span> l'inscrit dans les fenêtres d'indices <span class="mono">pos..pos+4</span> : la fenêtre d'indice <span class="mono">i</span> couvre donc les cases <span class="mono">i-4..i</span>, elle est repérée par sa <em>dernière</em> case. L'ensemble des fenêtres valides, lui, marquait <span class="mono">0..SIZE-5</span> — l'ensemble complémentaire. Quatre fenêtres fantômes débordaient à gauche et en haut, et les quatre dernières de chaque ligne étaient invisibles.</li>
+        <li><strong>Les deux diagonales étaient interverties.</strong> La disposition d'indice 2 traite en réalité <span class="mono">(1,-1)</span> et celle d'indice 3 traite <span class="mono">(1,1)</span>, l'inverse de ce que le tableau des axes déclare. Au milieu du plateau les deux diagonales se ressemblent trop pour que ça se voie ; seuls les bords trahissent l'erreur.</li>
+      </ul>
+
+      <div class="code-wrap">
+        <span class="code-label">le symptôme, mesuré</span>
+        <pre class="code">cinq aligné au milieu du plateau  →  score -52050
+cinq aligné contre le bord droit  →  score      93   <span class="c">le moteur ne le voit pas</span></pre>
+      </div>
+
+      <div class="callout">
+        <span class="callout-label">L'invariant qui vaut mieux qu'une relecture</span>
+        Chaque fenêtre couvre exactement cinq cases. Donc <strong>la somme, sur toutes les cases, du nombre de fenêtres qui les contiennent vaut cinq fois le nombre de fenêtres</strong>. Un comptage faux le viole forcément, quelle que soit la nature de l'erreur — pas besoin de savoir laquelle chercher. Avant correction, trois axes sur quatre le violaient. Le score est aussi devenu invariant par miroir et par transposée : 238 dans les quatre cas, contre 140 / 283 / 194 / 139 avant. C'est <span class="mono">tests/edge_test.cpp</span>.
+      </div>
+
       <div class="callout">
         <span class="callout-label">Ce que ce modèle donne gratuitement</span>
         Les <strong>motifs cassés</strong>. <span class="mono">XX.XX</span> est une fenêtre à quatre pierres, exactement comme <span class="mono">XXXX</span> — le trou ne change rien au comptage. Un moteur qui parcourt des alignements contigus, lui, n'y voit que deux paires et a besoin d'un correctif dédié pour ne pas les sous-évaluer. Ici, le cas n'existe pas.
@@ -867,8 +885,12 @@ main    →  4:5   profondeur  1,      6 nœuds   <span class="c">bloque une ext
           <tr><th>Contre <span class="mono">main</span> corrigé, <span class="mono">911110</span>, 40 parties</th><th>Score</th><th>Paires décisives</th><th>Verdict</th></tr>
           <tr><td>à largeur 5, comme <span class="mono">main</span></td><td class="num">50,0 %</td><td>5 / 10 &nbsp; (p = 0,62)</td><td>parité exacte</td></tr>
           <tr><td><strong>à largeur 6</strong></td><td class="num">72,5 %</td><td>10 / 11 &nbsp; (p = 0,006)</td><td>différence établie</td></tr>
+          <tr><td>à largeur 6, après correction de la géométrie</td><td class="num">60,0 %</td><td>6 / 8 &nbsp; (p = 0,14)</td><td>indice seul, sur cet échantillon</td></tr>
+          <tr><td><strong>les deux cumulés</strong></td><td>—</td><td><strong>16 / 19 &nbsp; (p = 0,002)</strong></td><td>différence établie</td></tr>
         </table>
       </div>
+
+      <p>Les deux mesures portent sur la même famille de moteur et se recoupent : prises ensemble, seize paires décisives sur dix-neuf, la différence tient. Prise seule, aucune des deux n'aurait suffi — c'est le prix d'échantillons de quarante parties.</p>
 
       <p>Le moteur est donc bien plus fort, mais la raison n'est ni la représentation bitboard ni l'heuristique : c'est <strong>un demi-candidat de plus par nœud, acheté avec le rendement d'une optimisation</strong>. Dit autrement — à réglages égaux, les deux approches se valent ; ce qui les sépare, c'est ce que l'une peut se permettre et l'autre pas.</p>
 
