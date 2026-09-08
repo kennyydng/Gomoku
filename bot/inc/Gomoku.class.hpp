@@ -25,6 +25,8 @@ public:
 			}
 		} )
 
+	// P = le joueur QUI BLOQUE. Les fenêtres adverses devenues mortes sortent
+	// du compte de l'adversaire, ce qui profite à P — voir Gomoku::place().
 	constexpr auto block_updater(bool P)
 		TO( [&,sign = P?1:-1]<size_t I>(unsigned long delta) {
 			if constexpr (I == 0) return;

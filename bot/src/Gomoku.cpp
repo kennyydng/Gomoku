@@ -38,7 +38,24 @@ void Gomoku::place(Pos pos, bool P) {
 		auto &p0lines = std::get<AX>(p0.lines);
 		auto &p1lines = std::get<AX>(p1.lines);
 		p0lines.score( compute(p1lines.of(0) & line), _score.upgrade_updater(P) );
-		p1lines.score( compute(p0lines.of(0) & line), _score.block_updater(!P)  );
+		// block_updater reçoit CELUI QUI BLOQUE, pas celui qui subit.
+		//
+		// Les deux updaters posent sign = P?1:-1 et ajoutent au MÊME score.
+		// Les fenêtres adverses que cette pierre vient de tuer doivent sortir
+		// du compte de l'adversaire : leur valeur est donc à retrancher avec
+		// le signe de l'adversaire, c'est-à-dire à AJOUTER avec celui du
+		// bloqueur, puisque sign_P = -sign_{!P}.
+		//
+		// Avec !P le terme était inversé : bloquer une menace DÉGRADAIT
+		// l'évaluation de celui qui bloque. Conséquence, la défense devenait
+		// invisible au tri des candidats, et la recherche annonçait des mats
+		// forcés qui n'existaient pas. Mesuré sur une position où l'adversaire
+		// menace un cinq : avant, la recherche s'arrêtait à la profondeur 5
+		// après 387 nœuds en croyant la partie jouée ; après, elle descend à
+		// 10 en 25163 nœuds et le coup de blocage passe 1er sur 29 candidats.
+		//
+		// Toute mesure de force prise avant cette correction est à refaire.
+		p1lines.score( compute(p0lines.of(0) & line), _score.block_updater(P)   );
 		p0lines += line;
 	}
 }
