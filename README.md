@@ -77,13 +77,20 @@ aucun coup au-dessus de 500 ms sur une partie complète.
 ### Compilation — `bot/build.sh`
 
 Le moteur exige la **réflexion statique C++26** (`template for`, splicers) et
-AVX2 : d'où l'image Arch avec GCC 16 du projet. Un GCC de distribution plus
-ancien ne le compilera pas. La commande vit dans `bot/build.sh`, appelée par le
-Dockerfile *et* par `route.ts` — deux copies auraient divergé.
+AVX2, donc **GCC 16 au minimum**. Ce n'est pas un compilateur exotique pour
+autant : le GCC livré par une distribution récente suffit — vérifié avec celui
+du dépôt Fedora 44 (16.1.1), `make` en 3 s sans un avertissement sous
+`-Wall -Wextra -Werror -pedantic`. Un GCC plus ancien, lui, ne le compilera pas.
 
-`route.ts` ne recompile `bot/Gomoku` que si les sources ont changé
-(comparaison de timestamps) : recompiler à chaque coup coûterait bien plus
-cher que la recherche elle-même.
+Les options vivent dans `bot/Makefile`, que le sujet exige de toute façon.
+`bot/build.sh` n'est plus qu'un point d'entrée qui délègue à `make`, pour les
+appelants qui ne veulent pas le connaître : le Dockerfile *et* `route.ts`.
+Une seule ligne de compilation dans le projet, donc rien qui puisse diverger.
+
+Les objets séparés et `-MMD -MP` font que toucher un en-tête recompile
+exactement ce qui en dépend. `route.ts` appelle `build.sh` à chaque requête
+sans se demander si c'est utile : `make` répond « Nothing to be done » en
+quelques millisecondes quand rien n'a bougé.
 
 ### Mesure — `bot/tools/`
 
@@ -110,58 +117,52 @@ prouve rien. `regress.sh` fige les positions dont on connaît la bonne réponse,
 - **Menu d'aide** (`HelpModal.tsx`) : explication des règles en cours de
   partie, directement dans l'UI.
 
-## Commandes Docker
+## Lancer le projet
 
-Ces commandes s'exécutent depuis la racine du projet. Elles utilisent `docker compose` (ou `podman compose` / `podman-compose` selon votre installation).
+Trois façons, toutes depuis la racine du dépôt. Chacune a été vérifiée sur la
+machine indiquée.
 
-- Build et lancer en premier plan :
+### 1. Le moteur seul — sans rien installer d'autre que GCC 16
 
-	docker compose up --build
+    make
+    printf '911100\n|9:9\n|10:10\n' | ./bot/Gomoku
 
-- Build et lancer en arrière-plan (détaché) :
+`make` compile en ~3 s ; relancé, il ne relinke pas. Le moteur lit une ligne de
+règles puis l'historique sur `stdin`, rend le coup choisi sur `stdout` et son
+raisonnement sur `stderr` (profondeur, nœuds, verdict du VCF).
 
-	docker compose up --build -d
+Les suites de tests, depuis `bot/` :
 
-- Rebuild des images sans cache :
+    sh tools/regress.sh ./Gomoku    # positions dont on connaît la bonne réponse
+    sh tools/robust.sh  ./Gomoku    # entrées malformées : refuser, jamais planter
 
-	docker compose build --no-cache
+### 2. L'interface web sans conteneur
 
-- Arrêter et supprimer les conteneurs, réseaux et volumes créés :
+    make                            # le moteur d'abord
+    cd app && npm ci && npm run dev # http://localhost:3000
 
-	docker compose down
+### 3. L'interface web en conteneur
 
-- Arrêter les conteneurs (sans suppression) :
+    docker compose up --build -d    # http://localhost:3000
+    docker compose logs -f
+    docker compose down             # arrêter et nettoyer
 
-	docker compose stop
+## Selon la machine
 
-- Voir et suivre les logs :
+| Machine | Ce qu'il faut savoir |
+| --- | --- |
+| **Fedora / RHEL avec podman** | `docker` y est souvent podman qui émule la CLI Docker et délègue à `podman-compose`. `docker compose`, `podman compose` et `podman-compose` sont alors équivalents — vérifié avec podman 5.8.4. |
+| **Docker sur Linux x86_64** | Rien de particulier. |
+| **macOS Apple Silicon (arm64)** | Fonctionne, mais **par émulation**. L'image Arch du projet n'est publiée qu'en amd64, d'où `platform: linux/amd64` dans `docker-compose.yaml` et `--disable-sandbox` sur les `pacman` du Dockerfile — sans quoi le build échoue sur `no match for platform in manifest` puis sur `error restricting syscalls via seccomp`. Les deux sont sans effet sur un hôte x86_64. |
 
-	docker compose logs -f
+> **Ne mesurez jamais les temps sous émulation.** Sur un Mac arm64 le moteur
+> atteint 8 à 9 plis en 849 ms ; en natif sur i7-12700, 12 plis et 320 ms de
+> moyenne sur 274 coups. L'émulation sert à vérifier que l'application
+> *fonctionne*, pas à juger sa vitesse.
 
-- Afficher l'état des services :
+## Autres commandes Compose
 
-	docker compose ps
-
-- Recréer / rebuild d'un seul service :
-
-	docker compose up -d --no-deps --build <nom_du_service>
-
-- Supprimer les images locales créées par Compose :
-
-	docker compose down --rmi local
-
-Remarques :
-
-- Si vous utilisez Podman, remplacez `docker compose` par `podman compose` ou utilisez `podman-compose` selon votre distribution.
-- Certaines CLI proposent une option `--watch` pour recharger automatiquement les services lors de modifications de fichiers; si votre CLI ne la supporte pas, utilisez un outil de rechargement adapté au service (ex. `nodemon`, watchers intégrés).
-
-Examples rapides :
-
-```bash
-docker compose up --build
-# ou en détaché
-docker compose up --build -d
-# stopper et nettoyer
-docker compose down
-```
-
+    docker compose build --no-cache          # rebuild complet
+    docker compose ps                        # état des services
+    docker compose stop                      # arrêter sans supprimer
+    docker compose down --rmi local          # supprimer aussi les images créées

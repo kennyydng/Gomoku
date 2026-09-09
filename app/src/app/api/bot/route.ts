@@ -1,9 +1,15 @@
 
 import { NextResponse } from 'next/server'
 import { execSync, spawnSync } from 'child_process';
+import { existsSync } from 'fs';
 import type { Gomoku, Rules, Position } from '../../game/Gomoku'
 
-const BOT_CWD = 'bot'
+// Deux dispositions coexistent, et le chemin doit valoir pour les deux.
+// L'image copie bot/ DANS le dossier de l'app (/var/www/app/bot) ; le dépôt,
+// lui, garde app/ et bot/ côte à côte. Un `npm run dev` lancé depuis app/
+// cherchait donc app/bot, qui n'existe pas — le moteur ne démarrait pas, et
+// l'API rendait une erreur de spawn au lieu d'un coup.
+const BOT_CWD = existsSync('bot') ? 'bot' : '../bot'
 
 // La commande de compilation vit dans bot/build.sh, qui délègue au Makefile —
 // le Dockerfile passe par le même script. Deux copies des drapeaux (C++26,
