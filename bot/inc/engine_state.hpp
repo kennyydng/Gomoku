@@ -4,10 +4,12 @@
 // (search.hpp). Tout ce que la recherche exige d'un état de jeu est réuni ici,
 // pour que ni l'un ni l'autre n'ait à connaître les détails de son voisin.
 //
-// Compilé et testé dans le conteneur Arch du projet (GCC 16.2 + réflexion) :
-// voir tests/engine_test.cpp, 17 vérifications. Il exige la réflexion C++26
-// via Gomoku.class.hpp, donc il ne se compile pas avec un GCC de distribution
-// classique — mais search.hpp, lui, reste vérifiable en C++23 standard.
+// Compilé et testé dans le conteneur Arch du projet (GCC 16.2) et sur la
+// machine de correction (Fedora 44, GCC 16.1.1 du dépôt) : voir
+// tests/engine_test.cpp. Il exige la réflexion C++26 via Gomoku.class.hpp,
+// donc GCC 16 au minimum — mais pas un compilateur exotique pour autant, le
+// GCC livré par une distribution récente suffit. search.hpp, lui, reste
+// vérifiable en C++23 standard.
 
 #include <algorithm>
 #include <vector>

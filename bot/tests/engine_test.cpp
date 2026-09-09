@@ -3,8 +3,8 @@
 // À lancer là où la branche compile (réflexion C++26) — le conteneur Arch du
 // projet convient :
 //
-//     g++ -std=c++26 -freflection -O2 -mavx2 -I inc \
-//         tests/engine_test.cpp src/Gomoku.cpp -o /tmp/engine_test && /tmp/engine_test
+//     g++ -std=c++26 -freflection -O2 -mavx2 -I inc tests/engine_test.cpp
+//         src/Gomoku.cpp -o /tmp/engine_test && /tmp/engine_test
 //
 // Ce test couvre les conventions dont dépend tout le reste et dont une erreur
 // ne provoquerait AUCUN plantage — juste un bot qui joue mal, bien plus

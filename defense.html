@@ -386,7 +386,7 @@
       <a class="toc-link" href="#ch10"><span class="toc-num">10</span>Questions probables</a>
     </nav>
     <div class="sidebar-foot">
-      Décrit la branche <span class="mono">merge-search</span> : le moteur bitboard de njaber, branché sur une recherche portée depuis <span class="mono">main</span>. Chaque chiffre a été mesuré sur cette machine (Intel i7-12700, GCC 16.2.1, natif), pas estimé.
+      Décrit la branche <span class="mono">merge-search</span> : le moteur bitboard de njaber, branché sur une recherche portée depuis <span class="mono">main</span>. Chaque chiffre a été mesuré sur cette machine (Intel i7-12700, GCC 16.1.1, natif), pas estimé.
     </div>
   </aside>
 
@@ -430,7 +430,7 @@
 
       <div class="callout">
         <span class="callout-label">Point de soutenance</span>
-        Si on te demande « pourquoi un compilateur exotique ? », la réponse honnête est : la représentation l'exige, et le prix est réel — le bot ne compile pas avec un GCC de distribution ancien. C'est pour ça que la <em>recherche</em>, elle, est écrite contre un concept et se compile en C++23 standard (chapitre 5) : la partie algorithmique reste vérifiable partout.
+        Si on te demande « pourquoi un compilateur exotique ? », la réponse est qu'il ne l'est pas : il faut GCC 16, pas un compilateur de laboratoire. Le moteur compile avec le GCC du dépôt Fedora 44 de cette machine (16.1.1) comme dans le conteneur du projet — <span class="mono">make</span>, 3 s, sans un avertissement sous <span class="mono">-Wall -Wextra -Werror -pedantic</span>. Le prix est réel mais borné : un GCC plus ancien ne suffit pas. C'est pour ça que la <em>recherche</em>, elle, est écrite contre un concept et se compile en C++23 standard (chapitre 5) : la partie algorithmique reste vérifiable partout.
       </div>
     </section>
 
@@ -796,6 +796,17 @@ return tmp.raw();</pre>
         </table>
       </div>
 
+      <p>Et le correctif ne coûte pas : il <em>rapporte</em>. Sur six parties complètes rejouées à l'identique avant et après, le moteur trouve trois fois plus de gains forcés, et comme chacun fait sauter la recherche principale, la moyenne par coup baisse.</p>
+
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <tr><th>6 parties identiques, 911110</th><th>Avant</th><th>Après</th></tr>
+          <tr><td>Temps moyen par coup</td><td class="num">353 ms</td><td class="num">322 ms</td></tr>
+          <tr><td>Profondeur moyenne</td><td class="num">11,3</td><td class="num">11,7</td></tr>
+          <tr><td>Gains forcés trouvés par le VCF</td><td class="num">10</td><td class="num">29</td></tr>
+        </table>
+      </div>
+
       <p>Le VCF voyait <strong>moins de la moitié</strong> des victoires qu'il pouvait prouver. La correction est exacte et non heuristique : une position terminale où l'attaquant a gagné n'est objectivement pas une défense qui tient. <span class="mono">bot/tests/vcf_test.cpp</span> la verrouille — sans elle, <span class="mono">vcf::find</span> ne rend rien du tout sur une position où noir gagne en trois coups.</p>
     </section>
 
@@ -933,7 +944,9 @@ main    →  4:5   profondeur  1,      6 nœuds   <span class="c">bloque une ext
           <tr><td>Termes de menace, A/B groupé, 40 parties</td><td class="num">62,5 %</td><td>5 paires décisives sur 5, p = 0,031</td></tr>
           <tr><td>… mais chacun pris seul</td><td class="num">47,5 % et 55,0 %</td><td>p = 0,81 et 0,34 : rien d'établi. Le terme de paires capturables coûte 11 % du débit sans gain mesurable — conservé pour la complétude de l'heuristique, en connaissance de cause</td></tr>
           <tr><td>Profondeur à <span class="mono">911110</span></td><td class="num">12 plis, 81 280 nœuds</td><td><span class="mono">main</span> : 11 plis pour 129 920 nœuds</td></tr>
-          <tr><td>Temps par coup, partie complète</td><td class="num">378 ms de moyenne</td><td>0 coup sur 36 au-dessus de 500 ms</td></tr>
+          <tr><td>Temps par coup, 8 parties complètes</td><td class="num">320 ms de moyenne</td><td>0 coup sur 274 au-dessus de 500 ms, maximum 490 ms</td></tr>
+          <tr><td>Profondeur effective sur ces 274 coups</td><td class="num">222 recherches sur 232 à ≥ 10 plis</td><td>les 10 autres s'arrêtent d'elles-mêmes sur un gain prouvé ; <strong>aucune</strong> n'est interrompue par le budget. Les 42 coups restants sont des courts-circuits du VCF, sans recherche</td></tr>
+          <tr><td>Valgrind, 9 scénarios</td><td class="num">0 erreur, 0 fuite définitive</td><td>jeu courant, VCF, cinq différé avec captures, plateau plein, et les cinq entrées malformées</td></tr>
           <tr><td>Victoire contre un adversaire faible</td><td class="num">8 / 8, 5,6 tours de moyenne</td><td>critère « moins de 20 tours » tenu</td></tr>
           <tr><td>Tests</td><td class="num">150 vérifications, 0 échec</td><td>recherche 55, règles 36, moteur 25, captures 16, bords 11, VCF 7</td></tr>
           <tr><td>Régressions et robustesse</td><td class="num">4 + 11 cas, 0 échec</td><td><span class="mono">tools/regress.sh</span> (positions connues), <span class="mono">tools/robust.sh</span> (entrées malformées)</td></tr>
@@ -945,7 +958,7 @@ main    →  4:5   profondeur  1,      6 nœuds   <span class="c">bloque une ext
 
       <div class="callout">
         <span class="callout-label">Précision de méthode</span>
-        Tous les chiffres de ce carnet viennent de la même machine (Intel i7-12700, GCC 16.2.1, exécution native). Une mesure de temps prise sous émulation n'est pas comparable — elle a d'ailleurs, un temps, fait croire l'inverse de la vérité sur le débit. Et une mesure de <em>force</em> prise avant la correction du chapitre 3 ne vaut rien : un moteur qui punit sa propre défense ne joue pas le jeu qu'on croit mesurer.
+        Tous les chiffres de ce carnet viennent de la même machine (Intel i7-12700, GCC 16.1.1, exécution native). Une mesure de temps prise sous émulation n'est pas comparable — elle a d'ailleurs, un temps, fait croire l'inverse de la vérité sur le débit. Et une mesure de <em>force</em> prise avant la correction du chapitre 3 ne vaut rien : un moteur qui punit sa propre défense ne joue pas le jeu qu'on croit mesurer.
       </div>
     </section>
 
@@ -971,13 +984,15 @@ main    →  4:5   profondeur  1,      6 nœuds   <span class="c">bloque une ext
       </div>
       <div class="qa">
         <div class="q">Votre bot respecte-t-il les 500 ms ?</div>
-        <div class="a"><p>Oui, mesuré sur une partie complète et pas sur une position choisie : 378 ms de moyenne, aucun coup au-dessus de 500 ms sur 36. Le critère du sujet porte sur la moyenne — les premiers coups sont quasi gratuits, ceux du milieu consomment le budget entier.</p>
+        <div class="a"><p>Oui, mesuré sur <strong>huit parties complètes</strong> et pas sur des positions choisies : 320 ms de moyenne, maximum 490 ms, aucun coup au-dessus de 500 ms sur 274. Le critère du sujet porte sur la moyenne — les premiers coups sont quasi gratuits, ceux du milieu consomment le budget entier.</p>
+        <p>Sur ces mêmes 274 coups, 222 recherches sur 232 atteignent au moins 10 plis. Les dix autres s'arrêtent <em>d'elles-mêmes</em> : <span class="mono">if (score &gt;= MATE) break</span> — un gain est prouvé, continuer serait du gaspillage. Aucune n'est interrompue par le budget, et c'est la vérification qui compte : une profondeur de 3 affichée à l'écran est un mat annoncé, pas un manque de temps.</p>
         <p>Une précision honnête, parce qu'elle découle directement de la réponse précédente : ces deux exigences se contredisent dès que la machine ralentit, et c'est la profondeur qui l'emporte. Le plafond de 800 ms sous 10 plis existe pour garantir les 10 plis, pas pour tenir les 500 ms. Sur une machine sensiblement plus lente que celle des mesures, la moyenne monterait. <strong>Tous les chiffres de ce carnet viennent d'une exécution native x86</strong> ; une mesure prise sous émulation ne veut rien dire — elle donne 8 à 9 plis en 849 ms sur les mêmes positions.</p></div>
       </div>
       <div class="qa">
         <div class="q">Que se passe-t-il si on donne n'importe quoi au binaire ?</div>
         <div class="a"><p>Il refuse et rend 1. <span class="mono">stdin</span> est une frontière : rien de ce qui en vient n'est digne de confiance, et la grille arrête la session sur un segfault comme sur une exception non rattrapée. La validation est faite dans la boucle de lecture, une fois par coup d'historique — pas dans <span class="mono">play()</span>, appelée des centaines de milliers de fois par recherche avec des coups engendrés par le moteur, valides par construction.</p>
-        <p>Trois défauts y étaient, tous du même genre : <span class="mono">main()</span> n'avait aucun <span class="mono">try</span>/<span class="mono">catch</span> alors que <span class="mono">Rules</span> et les opérateurs de lecture lèvent — et une exception qui s'échappe de <span class="mono">main()</span> appelle <span class="mono">std::terminate</span> ; les coordonnées n'étaient pas bornées, donc <span class="mono">|99:99</span> écrivait hors des bitboards ; et <span class="mono">Expect</span> affichait un <span class="mono">char[N]</span> non terminé par un zéro, donc lisait au-delà du tableau — un chemin latent qui devenait le chemin courant dès qu'on rattrapait les exceptions. <span class="mono">tools/robust.sh</span> fixe les onze cas.</p></div>
+        <p>Trois défauts y étaient, tous du même genre : <span class="mono">main()</span> n'avait aucun <span class="mono">try</span>/<span class="mono">catch</span> alors que <span class="mono">Rules</span> et les opérateurs de lecture lèvent — et une exception qui s'échappe de <span class="mono">main()</span> appelle <span class="mono">std::terminate</span> ; les coordonnées n'étaient pas bornées, donc <span class="mono">|99:99</span> écrivait hors des bitboards ; et <span class="mono">Expect</span> affichait un <span class="mono">char[N]</span> non terminé par un zéro, donc lisait au-delà du tableau — un chemin latent qui devenait le chemin courant dès qu'on rattrapait les exceptions. <span class="mono">tools/robust.sh</span> fixe les onze cas.</p>
+        <p>Vérifié plus loin que par l'absence de plantage : <strong>valgrind</strong> sur neuf scénarios — jeu courant, VCF, cinq différé avec captures, plateau plein, et les cinq entrées malformées — ne relève aucune erreur mémoire ni fuite définitive. C'est ce qui couvre le <em>bus error</em> et le <em>double-free</em> de la grille, que le fuzz seul ne peut pas atteindre.</p></div>
       </div>
       <div class="qa">
         <div class="q">Pourquoi un Makefile alors que tout passe par Docker ?</div>
@@ -1008,7 +1023,7 @@ main    →  4:5   profondeur  1,      6 nœuds   <span class="c">bloque une ext
 
     <hr class="rule" />
     <footer class="doc-end">
-      Carnet de préparation — décrit la branche <span class="mono">merge-search</span> dans son état actuel. Références de code : <span class="mono">bot/inc/BitBoard.class.hpp</span>, <span class="mono">bot/inc/Gomoku.class.hpp</span>, <span class="mono">bot/inc/search.hpp</span>, <span class="mono">bot/inc/engine_state.hpp</span>, <span class="mono">bot/inc/vcf.hpp</span>, <span class="mono">bot/src/Gomoku.cpp</span>, <span class="mono">bot/src/main.cpp</span>. Chiffres mesurés sur Intel i7-12700, GCC 16.2.1, exécution native.
+      Carnet de préparation — décrit la branche <span class="mono">merge-search</span> dans son état actuel. Références de code : <span class="mono">bot/inc/BitBoard.class.hpp</span>, <span class="mono">bot/inc/Gomoku.class.hpp</span>, <span class="mono">bot/inc/search.hpp</span>, <span class="mono">bot/inc/engine_state.hpp</span>, <span class="mono">bot/inc/vcf.hpp</span>, <span class="mono">bot/src/Gomoku.cpp</span>, <span class="mono">bot/src/main.cpp</span>. Chiffres mesurés sur Intel i7-12700, GCC 16.1.1, exécution native.
     </footer>
   </main>
 </div>
