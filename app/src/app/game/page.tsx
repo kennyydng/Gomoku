@@ -83,7 +83,9 @@ function GamePageContent() {
 
   const [botReport, setBotReport] = useState<"pending" | BotReport | null>(null)
   const [showRules, setShowRules] = useState(false)
-  const [turn, setTurn] = useState<number>(0)
+  // Nombre de pierres posees, les deux joueurs confondus. Ce n'est PAS un
+  // numero de tour : un tour, c'est un coup de chacun.
+  const [plies, setPlies] = useState<number>(0)
   const [score, setScore] = useState<[number,number]>([0,0])
   const [currentPlayer, setCurrentPlayer] = useState<Player>(0)
 
@@ -94,8 +96,8 @@ function GamePageContent() {
   }
 
   const handleGameUpdate = (game: Gomoku) => {
-    if (turn !== game.moves.length)
-      setTurn(game.moves.length)
+    if (plies !== game.moves.length)
+      setPlies(game.moves.length)
     if (score[0] !== game.score[0] || score[1] !== game.score[1])
       setScore(game.score)
     if (currentPlayer !== game.player)
@@ -155,7 +157,19 @@ function GamePageContent() {
         <div className="flex min-h-0 w-full flex-col items-center gap-3">
           <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-center">
             <div className={GAME_PAGE_THEME.statusPill}>
-              <span className="mr-2 align-middle">Tour {turn + 1}</span>
+              {/* Le bareme compte les TOURS — « AI victory in under 20 turns ».
+                  Afficher le nombre de pierres sous ce libelle doublait le
+                  chiffre : une partie de 18 tours s'annoncait « Tour 36 ». Le
+                  nombre de coups reste affiche a cote, sans ambiguite.
+
+                  ceil et non floor+1 : on montre le tour du DERNIER coup joue,
+                  qui est le chiffre que le bareme demande en fin de partie.
+                  Noir ouvre le tour, blanc le termine — le coup n a donc lieu
+                  au tour ceil(n/2). */}
+              <span className="mr-2 align-middle">
+                Tour {Math.max(1, Math.ceil(plies / 2))}
+                <span className="ml-1 opacity-60">· {plies} coups</span>
+              </span>
               <span className={`inline-block h-4 w-4 rounded-full border align-middle ${getTurnOrbClass(currentPlayer)}`} />
             </div>
             <div className="flex flex-col gap-3">
