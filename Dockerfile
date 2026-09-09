@@ -2,7 +2,7 @@ FROM archlinux:base-20260830.0.582275
 
 USER root
 RUN pacman -Sy
-RUN pacman -Sy --noconfirm npm gcc rsync
+RUN pacman -Sy --noconfirm npm gcc make rsync
 ENV ITER=1 
 RUN pacman -Sy --noconfirm valgrind debuginfod
 ENV DEBUGINFOD_URLS="https://debuginfod.archlinux.org"

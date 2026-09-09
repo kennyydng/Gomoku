@@ -17,16 +17,41 @@
 // double-quatre. Lus par Rules, qui applique exactement les mêmes conventions
 // que la branche main : les deux moteurs doivent jouer au même jeu.
 
-int main() {
+// stdin est une frontière : rien de ce qui en vient n'est digne de confiance.
+// Le sujet est catégorique — un programme qui plante ne vaut rien — et la
+// validation est donc faite ICI, une fois par coup d'historique, plutôt que
+// dans play(), appelée des centaines de milliers de fois par recherche avec
+// des coups que le moteur a lui-même engendrés et qui sont valides par
+// construction. Le corps est un function-try-block : Rules et les opérateurs
+// de lecture lèvent, et une exception qui s'échappe de main() appelle
+// std::terminate.
+int main() try {
 	std::string rulesLine;
-	std::getline(std::cin, rulesLine);
+	if (!std::getline(std::cin, rulesLine)) {
+		std::cerr << "Entree vide : une ligne de regles est attendue" << std::endl;
+		return 1;
+	}
 
 	EngineState state{Rules{rulesLine}};
 
 	Pos move;
 	char c;
 	while (std::cin >> c && c == '|') {
-		std::cin >> move;
+		if (!(std::cin >> move)) {
+			std::cerr << "Coup illisible dans l'historique" << std::endl;
+			return 1;
+		}
+		// Pos::valid() borne aussi les négatifs : x et y sont comparés en
+		// unsigned, donc -3 devient énorme et sort. Sans ce test, un `|99:99`
+		// écrit hors des bitboards.
+		if (!move.valid() || !state.game.onBoard(move)) {
+			std::cerr << "Coup hors du plateau : " << move << std::endl;
+			return 1;
+		}
+		if (!state.game.stone(move).empty()) {
+			std::cerr << "Case deja occupee : " << move << std::endl;
+			return 1;
+		}
 		std::cout << move;
 		state = state.after(move);
 	}
@@ -99,4 +124,11 @@ int main() {
 		std::cout << "|" << *best;
 	else
 		std::cerr << "Aucun coup jouable" << std::endl;
+	return 0;
+} catch (std::exception const &e) {
+	std::cerr << "Erreur : " << e.what() << std::endl;
+	return 1;
+} catch (...) {
+	std::cerr << "Erreur inconnue" << std::endl;
+	return 1;
 }
