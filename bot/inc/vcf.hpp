@@ -105,8 +105,17 @@ inline bool defends(EngineState const &state, Budget &b, int plies) {
 
 	for (Pos p : replies) {
 		EngineState next = state.after(p);
-		if (next.terminal())
-			return true;                 // le défenseur conclut ou survit
+		if (next.terminal()) {
+			// Terminal ne veut pas dire « sauvé ». Sous captureUnperfect, un
+			// cinq de l'attaquant reste cassable tant qu'une de ses paires est
+			// prenable : la partie n'est pas finie quand il le pose, elle se
+			// termine sur le coup du DÉFENSEUR, dès que celui-ci répond autre
+			// chose qu'une capture. Rendre true ici comptait cette parade
+			// perdante comme tenue, et abandonnait la séquence.
+			if (next.winner() == (int)attacker)
+				continue;
+			return true;                 // le défenseur conclut, ou nulle
+		}
 		if (!attacks(next, b, plies - 1))
 			return true;                 // l'attaquant ne va pas au bout
 	}
