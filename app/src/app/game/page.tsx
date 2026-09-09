@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import GomokuBoard from '../components/gomoku/GomokuBoard'
+import type { BotReport } from '../components/gomoku/GomokuBoard'
 import { Gomoku } from './Gomoku'
 import { getCaptureOrbClass, getTurnOrbClass } from '../constants/game'
 import { GAME_PAGE_THEME } from '../constants/ui'
@@ -80,7 +81,7 @@ function GamePageContent() {
   
   const rules = parseRulesFromParams()
 
-  const [botResponseMs, setBotResponseMs] = useState<"pending" | number | null>(null)
+  const [botReport, setBotReport] = useState<"pending" | BotReport | null>(null)
   const [showRules, setShowRules] = useState(false)
   const [turn, setTurn] = useState<number>(0)
   const [score, setScore] = useState<[number,number]>([0,0])
@@ -183,17 +184,32 @@ function GamePageContent() {
             </div>
             <div className={GAME_PAGE_THEME.statusPill}>
               Bot response: {
-                botResponseMs === 'pending' ?
+                botReport === 'pending' ?
                   "Thinking..." :
-                botResponseMs === null ?
+                botReport === null ?
                   '...' :
-                `${botResponseMs} ms`
+                `${botReport.ms} ms`
               }
             </div>
+            {/* Le raisonnement de la recherche, la ou on peut le lire pendant
+                une partie : profondeur reellement atteinte et noeuds visites.
+                « VCF » signale que le moteur a prouve un gain force par
+                menaces et n'a donc pas lance la recherche principale — d'ou un
+                temps tres bas, qui autrement ressemblerait a une anomalie. */}
+            {botReport !== null && botReport !== 'pending' && botReport.depth !== null && (
+              <div className={GAME_PAGE_THEME.statusPill}>
+                {botReport.vcf
+                  ? `VCF: forced win`
+                  : `Depth ${botReport.depth}` +
+                    (botReport.nodes !== null
+                      ? ` / ${botReport.nodes.toLocaleString('en-US')} nodes`
+                      : '')}
+              </div>
+            )}
           </div>
 
           <section className={GAME_PAGE_THEME.sectionPanel}>
-            <GomokuBoard rules={rules} mode={mode} onUpdate={handleGameUpdate} onBotResponseTime={setBotResponseMs} />
+            <GomokuBoard rules={rules} mode={mode} onUpdate={handleGameUpdate} onBotResponseTime={setBotReport} />
           </section>
         </div>
 

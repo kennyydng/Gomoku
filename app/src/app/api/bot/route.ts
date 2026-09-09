@@ -1,34 +1,22 @@
 
 import { NextResponse } from 'next/server'
-import { execSync } from 'child_process';
-import { existsSync, statSync } from 'fs';
-import { join } from 'path';
+import { execSync, spawnSync } from 'child_process';
 import type { Gomoku, Rules, Position } from '../../game/Gomoku'
 
 const BOT_CWD = 'bot'
-const BOT_BINARY = 'Gomoku'
-const BOT_SOURCES = [
-  'src/main.cpp', 'src/Gomoku.cpp',
-  'inc/Gomoku.class.hpp', 'inc/engine_state.hpp', 'inc/search.hpp',
-  'inc/vcf.hpp', 'inc/BitBoard.class.hpp', 'inc/gomoku_types.hpp',
-]
 
-// La commande de compilation vit dans bot/build.sh, que le Dockerfile appelle
-// aussi : deux copies des drapeaux (C++26, réflexion, AVX2) divergeraient, et
-// la divergence ne se verrait qu'au moment où l'image ne compile plus.
+// La commande de compilation vit dans bot/build.sh, qui délègue au Makefile —
+// le Dockerfile passe par le même script. Deux copies des drapeaux (C++26,
+// réflexion, AVX2) divergeraient, et la divergence ne se verrait qu'au moment
+// où l'image ne compile plus.
+//
+// On l'appelle à chaque requête sans se demander si c'est utile : make répond
+// « Nothing to be done » en quelques millisecondes quand rien n'a bougé. La
+// version précédente listait les en-têtes à surveiller à la main, en en
+// oubliant six (sets.hpp, terms.hpp, vec.hpp, sugar.hpp, macros.hpp,
+// parsing_utils.hpp) — les modifier ne déclenchait aucune recompilation, et le
+// bot répondait avec du code périmé. make lit les vraies dépendances (-MMD).
 const BOT_BUILD = 'sh build.sh'
-
-function botNeedsRebuild(): boolean {
-  const binaryPath = join(BOT_CWD, BOT_BINARY)
-  if (!existsSync(binaryPath))
-    return true
-
-  const binaryTime = statSync(binaryPath).mtimeMs
-  return BOT_SOURCES.some((relativePath) => {
-    const sourcePath = join(BOT_CWD, relativePath)
-    return existsSync(sourcePath) && statSync(sourcePath).mtimeMs > binaryTime
-  })
-}
 
 export async function POST(request: Request) {
   const { game: {rules, moves} } = (await request.json()) as { game: Gomoku }
@@ -58,15 +46,39 @@ export async function POST(request: Request) {
 
   const state = `${gridToken}${rulesPayload}\n${moves.map(([x,y]) => `|${x}:${y}`).join('')}`;
 
-  if (botNeedsRebuild()) {
-    console.log("(Re)Compiling");
-    execSync(BOT_BUILD, {cwd: BOT_CWD});
-  }
+  execSync(BOT_BUILD, {cwd: BOT_CWD});
 
   console.log("Asking bot for move...");
   const startTime = Date.now();
-  const result = execSync("./Gomoku", {cwd: BOT_CWD, input: state, timeout: 500000}).toString();
+  // spawnSync et non execSync : le moteur écrit son raisonnement sur stderr
+  // (profondeur atteinte, nœuds visités, verdict du VCF), et execSync ne rend
+  // que stdout — ces chiffres finissaient dans les logs du conteneur, hors de
+  // portée de l'interface. Le sujet les réclame explicitement : « some sort of
+  // debugging process that lets you examine the reasoning process of your AI
+  // while it's running… it would help during your defense sessions ».
+  const run = spawnSync("./Gomoku", {
+    cwd: BOT_CWD, input: state, timeout: 500000, encoding: 'utf8',
+  });
   const time = Date.now() - startTime;
+
+  const result = run.stdout ?? ''
+  const diagnostics = run.stderr ?? ''
+
+  // Le moteur rend 1 sur une entrée qu'il refuse, et ne plante plus (voir
+  // bot/tools/robust.sh). Un statut non nul est donc un vrai refus, pas un
+  // crash : on le remonte au lieu de le confondre avec « aucun coup ».
+  if (run.error || run.status !== 0) {
+    console.error(`Bot failed (status ${run.status}): ${diagnostics.trim()}`)
+    return NextResponse.json({ move: null, time, error: 'engine refused the position' })
+  }
+
+  const numberFrom = (re: RegExp) => {
+    const m = re.exec(diagnostics)
+    return m ? Number(m[1]) : null
+  }
+  const depth = numberFrom(/Depth reached: (\d+)/)
+  const nodes = numberFrom(/Nodes: (\d+)/)
+  const vcf = /VCF: victoire forcee/.test(diagnostics)
 
   const moveRegex = /\|(\d+):(\d+)/g
   let best: RegExpExecArray | null = null
@@ -78,7 +90,7 @@ export async function POST(request: Request) {
   } while (match)
 
   if (!best) {
-    return NextResponse.json({ move: null, time })
+    return NextResponse.json({ move: null, time, depth, nodes, vcf })
   }
 
   const x = Number(best[1])
@@ -89,5 +101,8 @@ export async function POST(request: Request) {
   return NextResponse.json({
     move: [x, y] as Position,
     time,
+    depth,
+    nodes,
+    vcf,
   })
 }

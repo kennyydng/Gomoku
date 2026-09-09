@@ -7,11 +7,21 @@ import type { Rules, Player, Position } from '../../game/Gomoku'
 
 type GameMode = 'local' | 'ai' | 'training'
 
+// Ce que le moteur rapporte de sa propre recherche. Le sujet demande un moyen
+// d'examiner son raisonnement pendant qu'il tourne ; ces trois chiffres sont
+// ce qu'il produit deja sur stderr, remonte jusqu'a l'ecran.
+export type BotReport = {
+  ms: number
+  depth: number | null
+  nodes: number | null
+  vcf: boolean
+}
+
 interface GomokuBoardProps {
   mode: GameMode
   rules: Rules
   onUpdate?: (game: Gomoku) => void
-  onBotResponseTime?: (ms: "pending" | number | null) => void
+  onBotResponseTime?: (report: "pending" | BotReport | null) => void
 }
 
 function resultString(mode: GameMode, result: Gomoku['result']) {
@@ -82,8 +92,16 @@ function GomokuBoard({ mode, rules, onUpdate, onBotResponseTime }: GomokuBoardPr
 
       if (!response.ok) throw new Error('Bot response failed')
 
-      const data: { move?: Position, time?: number } = await response.json()
-      onBotResponseTime?.(data.time ?? null)
+      const data: {
+        move?: Position, time?: number,
+        depth?: number | null, nodes?: number | null, vcf?: boolean,
+      } = await response.json()
+      onBotResponseTime?.(data.time === undefined ? null : {
+        ms: data.time,
+        depth: data.depth ?? null,
+        nodes: data.nodes ?? null,
+        vcf: data.vcf ?? false,
+      })
       return data.move
     } catch (e) {
       onBotResponseTime?.(null)
