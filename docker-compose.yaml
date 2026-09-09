@@ -2,6 +2,14 @@
 services:
   gomoku:
     build: .
+    # L'image Arch du projet n'est publiee qu'en amd64, et le moteur exige AVX2
+    # de toute facon. Sur un hote arm64 (Mac Apple Silicon), Docker refuse de
+    # choisir l'emulation tout seul : « no match for platform in manifest ».
+    # Sur un hote amd64 cette ligne ne change rien.
+    #
+    # ATTENTION : sous emulation, les temps mesures ne veulent rien dire. Le
+    # critere des 500 ms par coup ne se verifie que sur une machine x86.
+    platform: linux/amd64
     entrypoint: [bash,/var/docker-entrypoint.sh]
     ports: [3000:3000]
     environment:
