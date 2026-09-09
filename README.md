@@ -119,50 +119,37 @@ prouve rien. `regress.sh` fige les positions dont on connaît la bonne réponse,
 
 ## Lancer le projet
 
-Trois façons, toutes depuis la racine du dépôt. Chacune a été vérifiée sur la
-machine indiquée.
+Depuis la racine du dépôt. Les commandes sont les mêmes partout — `docker` et
+`podman` sont interchangeables, la CLI Docker n'étant qu'un alias de podman sur
+les distributions qui l'installent ainsi.
 
-### 1. Le moteur seul — sans rien installer d'autre que GCC 16
+### En conteneur
+
+    docker compose up --build -d    # http://localhost:3000
+    docker compose logs -f
+    docker compose down
+
+### Sans conteneur
+
+Il faut **GCC 16** (réflexion C++26) et Node. Pas de compilateur exotique : le
+GCC d'une distribution récente suffit.
+
+    make                            # le moteur, ~3 s
+    cd app && npm ci && npm run dev # l'interface, http://localhost:3000
+
+### Le moteur seul
+
+Le plus court chemin pour voir le bot réfléchir. Il lit les règles puis
+l'historique sur `stdin`, rend le coup sur `stdout` et son raisonnement sur
+`stderr` — profondeur, nœuds, verdict du VCF.
 
     make
     printf '911100\n|9:9\n|10:10\n' | ./bot/Gomoku
 
-`make` compile en ~3 s ; relancé, il ne relinke pas. Le moteur lit une ligne de
-règles puis l'historique sur `stdin`, rend le coup choisi sur `stdout` et son
-raisonnement sur `stderr` (profondeur, nœuds, verdict du VCF).
-
-Les suites de tests, depuis `bot/` :
-
+    cd bot
     sh tools/regress.sh ./Gomoku    # positions dont on connaît la bonne réponse
     sh tools/robust.sh  ./Gomoku    # entrées malformées : refuser, jamais planter
 
-### 2. L'interface web sans conteneur
-
-    make                            # le moteur d'abord
-    cd app && npm ci && npm run dev # http://localhost:3000
-
-### 3. L'interface web en conteneur
-
-    docker compose up --build -d    # http://localhost:3000
-    docker compose logs -f
-    docker compose down             # arrêter et nettoyer
-
-## Selon la machine
-
-| Machine | Ce qu'il faut savoir |
-| --- | --- |
-| **Fedora / RHEL avec podman** | `docker` y est souvent podman qui émule la CLI Docker et délègue à `podman-compose`. `docker compose`, `podman compose` et `podman-compose` sont alors équivalents — vérifié avec podman 5.8.4. |
-| **Docker sur Linux x86_64** | Rien de particulier. |
-| **macOS Apple Silicon (arm64)** | Fonctionne, mais **par émulation**. L'image Arch du projet n'est publiée qu'en amd64, d'où `platform: linux/amd64` dans `docker-compose.yaml` et `--disable-sandbox` sur les `pacman` du Dockerfile — sans quoi le build échoue sur `no match for platform in manifest` puis sur `error restricting syscalls via seccomp`. Les deux sont sans effet sur un hôte x86_64. |
-
-> **Ne mesurez jamais les temps sous émulation.** Sur un Mac arm64 le moteur
-> atteint 8 à 9 plis en 849 ms ; en natif sur i7-12700, 12 plis et 320 ms de
-> moyenne sur 274 coups. L'émulation sert à vérifier que l'application
-> *fonctionne*, pas à juger sa vitesse.
-
-## Autres commandes Compose
-
-    docker compose build --no-cache          # rebuild complet
-    docker compose ps                        # état des services
-    docker compose stop                      # arrêter sans supprimer
-    docker compose down --rmi local          # supprimer aussi les images créées
+> **Sur un Mac Apple Silicon**, tout fonctionne mais par émulation : le moteur
+> y atteint 8 à 9 plis en 849 ms, contre 12 plis et 320 ms en natif. Vérifiez-y
+> que l'application marche, jamais qu'elle est rapide.
