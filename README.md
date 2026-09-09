@@ -129,6 +129,12 @@ les distributions qui l'installent ainsi.
     docker compose logs -f
     docker compose down
 
+Les sources sont montées dans le conteneur : **il n'y a rien à relancer après
+une modification**. `app/` est rechargé à chaud par Next, et `bot/` est
+recompilé à la requête suivante, `route.ts` appelant `make` à chaque appel.
+Seul un changement de `Dockerfile`, de `package.json` ou du `Makefile` demande
+un `--build`.
+
 ### Sans conteneur
 
 Il faut **GCC 16** (réflexion C++26) et Node. Pas de compilateur exotique : le

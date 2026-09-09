@@ -19,8 +19,18 @@ services:
     # Docker le creait a la volee ; podman refuse et fait echouer `up` — ce qui
     # cassait la relance apres un `stop` ou un `down`.
     #
-    # Le rechargement a chaud passe par develop.watch ci-dessous, pas par des
-    # montages de sources.
+    # Les sources, elles, sont montees : sans ca il faut reconstruire l'image a
+    # chaque modification. develop.watch ci-dessous ferait le meme travail, mais
+    # podman-compose ne connait pas la sous-commande `watch` — un simple bind
+    # mount, lui, marche partout.
+    #
+    # inc et src seulement, pas bot/ entier : le binaire et les objets restent
+    # ceux du conteneur. Les monter depuis l'hote y ferait entrer un binaire
+    # compile pour une autre architecture des que l'hote n'est pas x86_64.
+    volumes:
+      - ./app/src:/var/www/app/src
+      - ./bot/inc:/var/www/app/bot/inc
+      - ./bot/src:/var/www/app/bot/src
     develop:
       watch:
         - action: sync
