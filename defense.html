@@ -400,7 +400,7 @@
         <div class="stat"><div class="v">1 020</div><div class="k">fenêtres de cinq</div></div>
         <div class="stat"><div class="v">460 ms</div><div class="k">budget par coup</div></div>
         <div class="stat"><div class="v">≥ 10</div><div class="k">plis garantis</div></div>
-        <div class="stat"><div class="v">119</div><div class="k">vérifications</div></div>
+        <div class="stat"><div class="v">155</div><div class="k">vérifications</div></div>
       </div>
     </div>
 
@@ -774,6 +774,29 @@ return tmp.raw();</pre>
       </div>
 
       <p>Autrement dit : <strong>gratuit, et il sert</strong>. Sur une position ordinaire il conclut en un nœud qu'il n'y a rien de forçant ; sur un three ouvert il trouve la victoire en trois.</p>
+
+      <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Le bug qui rendait le VCF à moitié aveugle</h3>
+
+      <p>La boucle des réponses du défenseur contenait <span class="mono">if (next.terminal()) return true;</span> — une position terminale comptait comme une défense qui tient. C'est faux, et d'une manière que seule <em>l'interaction de deux règles</em> révèle.</p>
+
+      <p>Sous <span class="mono">captureUnperfect</span>, un cinq dont une paire est prenable ne termine pas la partie quand l'attaquant le pose : <span class="mono">play()</span> le met en attente, et c'est le coup <strong>suivant</strong> — celui du défenseur — qui le résout. Le défenseur qui répond autre chose qu'une capture perd donc <em>sur son propre coup</em>. Le VCF lisait cet état terminal, concluait « il a survécu », et abandonnait la séquence sans jamais évaluer la capture, la seule vraie parade et la seule qui pouvait être réfutée à son tour.</p>
+
+      <div class="callout">
+        <span class="callout-label">Pourquoi ce bug est difficile à voir</span>
+        Il est dans la direction sûre. Le VCF ne prétendait jamais gagner à tort : il renonçait, ce qui est l'erreur pardonnable des deux. Rien ne plante, aucune assertion ne saute, et le bot joue simplement un coup ordinaire à la place d'un mat prouvé. Le seul symptôme est une victoire forcée non jouée — invisible sans comparer deux versions sur les mêmes positions.
+      </div>
+
+      <div class="tbl-wrap">
+        <table class="tbl">
+          <tr><th>300 positions aléatoires (911100)</th><th>Résultat</th></tr>
+          <tr><td>Positions gagnantes vues, avant</td><td class="num">47</td></tr>
+          <tr><td>Positions gagnantes vues, après</td><td class="num">100</td></tr>
+          <tr><td>Perdues par la correction</td><td class="num">0</td></tr>
+          <tr><td>Coût en temps sur position ordinaire</td><td class="num">nul (1 à 3 nœuds)</td></tr>
+        </table>
+      </div>
+
+      <p>Le VCF voyait <strong>moins de la moitié</strong> des victoires qu'il pouvait prouver. La correction est exacte et non heuristique : une position terminale où l'attaquant a gagné n'est objectivement pas une défense qui tient. <span class="mono">bot/tests/vcf_test.cpp</span> la verrouille — sans elle, <span class="mono">vcf::find</span> ne rend rien du tout sur une position où noir gagne en trois coups.</p>
     </section>
 
     <!-- ===================== CHAPITRE 8 ===================== -->
@@ -807,6 +830,15 @@ return tmp.raw();</pre>
       <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">La victoire différée, la seule règle qui dépend de l'histoire</h3>
       <p>Avec <span class="mono">captureUnperfect</span>, un cinq dont une pierre appartient à une paire capturable ne gagne pas tout de suite : il gagne s'il <strong>survit au coup adverse</strong>. « Ce cinq gagne-t-il ? » ne se lit donc pas sur la position seule.</p>
       <p>D'où un changement d'architecture : l'issue est décidée par <span class="mono">play()</span> et mémorisée, au lieu d'être recalculée à chaque nœud sur huit <span class="mono">CountBoard</span>. <span class="mono">is_over()</span> et <span class="mono">winner()</span> deviennent une comparaison. Le hachage porte un bit pour le cinq en attente, faute de quoi la table de transposition confondrait deux positions de valeurs différentes.</p>
+
+      <p>Le sujet donne en réalité <strong>deux</strong> façons de survivre à un cinq adverse, et le moteur n'en connaissait qu'une. La première parle de <em>casser la ligne</em>, donc d'une paire prise <strong>dedans</strong> : c'est <span class="mono">isUnperfect5</span>. La seconde parle de <em>compter</em> — « If the player has already lost four pairs and the opponent can capture one more, the opponent wins by capture. » À huit pierres perdues, n'importe quelle paire prise <strong>ailleurs sur le plateau</strong> porte l'adversaire à dix et gagne, sans toucher à un alignement qui peut être parfaitement inattaquable.</p>
+
+      <div class="callout">
+        <span class="callout-label">Ce que la troisième puce du sujet dit du câblage</span>
+        « If there is no possibility of this happening, there is no need to continue the game. » Donc <em>s'il y a</em> une possibilité, la partie continue d'un coup. Les deux clauses partagent le même mécanisme : on diffère, et le coup suivant tranche. Aucun chemin de résolution supplémentaire n'a été nécessaire — la victoire par capture est déjà testée en tête de <span class="mono">play()</span>, donc avant qu'on regarde si la ligne a tenu. Le correctif tient dans la condition de mise en attente.
+      </div>
+
+      <p>Le coût est nul en pratique : <span class="mono">capturable()</span> n'est évalué que sur le fil des huit pierres perdues, la condition de gauche court-circuitant le reste du temps. La clause est appliquée <strong>aux deux moteurs</strong> — le front a son propre jeu de règles, et un désaccord ferait diverger l'issue affichée par l'interface de celle que le bot calcule. <span class="mono">app/tests/rules_test.ts</span> rejoue en TypeScript la position tranchée par <span class="mono">bot/tests/rules_test.cpp</span> et exige les mêmes verdicts.</p>
 
       <h3 style="font-size:1.05rem; margin-bottom:0.5rem;">Légalité : à la racine, et seulement là</h3>
       <p>Le double-trois, le double-quatre et l'overline interdit demandent une détection de menaces récursive. La faire à chaque nœud coûterait cette détection par candidat, des centaines de milliers de fois — pour rien, puisque la recherche ne fait qu'<em>estimer</em>. Seul le coup <strong>réellement rendu</strong> doit être légal : le filtre s'applique à la racine, et la sortie du VCF est validée séparément.</p>
@@ -903,7 +935,9 @@ main    →  4:5   profondeur  1,      6 nœuds   <span class="c">bloque une ext
           <tr><td>Profondeur à <span class="mono">911110</span></td><td class="num">12 plis, 81 280 nœuds</td><td><span class="mono">main</span> : 11 plis pour 129 920 nœuds</td></tr>
           <tr><td>Temps par coup, partie complète</td><td class="num">378 ms de moyenne</td><td>0 coup sur 36 au-dessus de 500 ms</td></tr>
           <tr><td>Victoire contre un adversaire faible</td><td class="num">8 / 8, 5,6 tours de moyenne</td><td>critère « moins de 20 tours » tenu</td></tr>
-          <tr><td>Tests</td><td class="num">119 vérifications, 0 échec</td><td>recherche 55, moteur 25, captures 16, règles 23</td></tr>
+          <tr><td>Tests</td><td class="num">150 vérifications, 0 échec</td><td>recherche 55, règles 36, moteur 25, captures 16, bords 11, VCF 7</td></tr>
+          <tr><td>Régressions et robustesse</td><td class="num">4 + 11 cas, 0 échec</td><td><span class="mono">tools/regress.sh</span> (positions connues), <span class="mono">tools/robust.sh</span> (entrées malformées)</td></tr>
+          <tr><td>Accord des deux moteurs</td><td class="num">5 vérifications, 0 échec</td><td><span class="mono">app/tests/rules_test.ts</span> rejoue en TypeScript une position tranchée par le C++</td></tr>
         </table>
       </div>
 
@@ -937,7 +971,18 @@ main    →  4:5   profondeur  1,      6 nœuds   <span class="c">bloque une ext
       </div>
       <div class="qa">
         <div class="q">Votre bot respecte-t-il les 500 ms ?</div>
-        <div class="a"><p>Oui, mesuré sur une partie complète et pas sur une position choisie : 378 ms de moyenne, aucun coup au-dessus de 500 ms sur 36. Le critère du sujet porte sur la moyenne — les premiers coups sont quasi gratuits, ceux du milieu consomment le budget entier.</p></div>
+        <div class="a"><p>Oui, mesuré sur une partie complète et pas sur une position choisie : 378 ms de moyenne, aucun coup au-dessus de 500 ms sur 36. Le critère du sujet porte sur la moyenne — les premiers coups sont quasi gratuits, ceux du milieu consomment le budget entier.</p>
+        <p>Une précision honnête, parce qu'elle découle directement de la réponse précédente : ces deux exigences se contredisent dès que la machine ralentit, et c'est la profondeur qui l'emporte. Le plafond de 800 ms sous 10 plis existe pour garantir les 10 plis, pas pour tenir les 500 ms. Sur une machine sensiblement plus lente que celle des mesures, la moyenne monterait. <strong>Tous les chiffres de ce carnet viennent d'une exécution native x86</strong> ; une mesure prise sous émulation ne veut rien dire — elle donne 8 à 9 plis en 849 ms sur les mêmes positions.</p></div>
+      </div>
+      <div class="qa">
+        <div class="q">Que se passe-t-il si on donne n'importe quoi au binaire ?</div>
+        <div class="a"><p>Il refuse et rend 1. <span class="mono">stdin</span> est une frontière : rien de ce qui en vient n'est digne de confiance, et la grille arrête la session sur un segfault comme sur une exception non rattrapée. La validation est faite dans la boucle de lecture, une fois par coup d'historique — pas dans <span class="mono">play()</span>, appelée des centaines de milliers de fois par recherche avec des coups engendrés par le moteur, valides par construction.</p>
+        <p>Trois défauts y étaient, tous du même genre : <span class="mono">main()</span> n'avait aucun <span class="mono">try</span>/<span class="mono">catch</span> alors que <span class="mono">Rules</span> et les opérateurs de lecture lèvent — et une exception qui s'échappe de <span class="mono">main()</span> appelle <span class="mono">std::terminate</span> ; les coordonnées n'étaient pas bornées, donc <span class="mono">|99:99</span> écrivait hors des bitboards ; et <span class="mono">Expect</span> affichait un <span class="mono">char[N]</span> non terminé par un zéro, donc lisait au-delà du tableau — un chemin latent qui devenait le chemin courant dès qu'on rattrapait les exceptions. <span class="mono">tools/robust.sh</span> fixe les onze cas.</p></div>
+      </div>
+      <div class="qa">
+        <div class="q">Pourquoi un Makefile alors que tout passe par Docker ?</div>
+        <div class="a"><p>Parce que le sujet l'exige nommément, et que la grille en fait une <em>vérification préliminaire</em> : absent, la session s'arrête avant la première question. Mais ce n'est pas un second chemin de compilation — <span class="mono">docker compose</span> construit l'image, dont le <span class="mono">RUN sh build.sh</span> appelle <span class="mono">make</span>. Il n'y a qu'une ligne de compilation dans le projet, et elle vit dans le Makefile.</p>
+        <p>Le gain n'est pas que réglementaire : les objets séparés et <span class="mono">-MMD -MP</span> évitent de tout recompiler. Toucher un en-tête recompile exactement ce qui en dépend, et au démarrage du conteneur <span class="mono">make</span> répond « Nothing to be done » au lieu de refaire les deux unités.</p></div>
       </div>
       <div class="qa">
         <div class="q">Racontez-moi un bug que vous avez trouvé chez quelqu'un d'autre.</div>
