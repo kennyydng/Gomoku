@@ -462,7 +462,31 @@ void Gomoku::play(Pos pos) {
 		return;
 	}
 	if (five) {
-		if (_rules.captureUnperfect && isUnperfect5(fStart, fEnd, fDir, player)) {
+		// Le sujet donne DEUX facons de survivre a un cinq adverse, et elles
+		// ne se recouvrent pas.
+		//
+		// La premiere : casser la ligne en prenant une paire DEDANS.
+		const bool breakable = _rules.captureUnperfect
+			&& isUnperfect5(fStart, fEnd, fDir, player);
+
+		// La seconde : compter. « If the player has already lost four pairs
+		// and the opponent can capture one more, the opponent wins by
+		// capture. » A huit pierres perdues, n'importe quelle paire prise
+		// AILLEURS sur le plateau porte l'adversaire a dix — il gagne sans
+		// toucher a l'alignement, qui peut etre parfaitement inattaquable.
+		//
+		// capturable() n'est evalue que sur le fil des huit pierres, donc
+		// presque jamais : la condition de gauche court-circuite.
+		const bool outcounted = _rules.captureUnperfect
+			&& _captures[!player] >= 8 && capturable(!player) > 0;
+
+		if (breakable || outcounted) {
+			// Meme mecanisme dans les deux cas, et c'est la troisieme puce du
+			// sujet qui le dit : « If there is no possibility of this
+			// happening, there is no need to continue the game. » S'il y a une
+			// possibilite, on joue le coup de plus qui tranche. La resolution
+			// est en tete de play() — l'adversaire qui atteint dix prises
+			// gagne avant meme qu'on regarde si la ligne a tenu.
 			_delayed  = true;
 			_dStart   = fStart;
 			_dEnd     = fEnd;

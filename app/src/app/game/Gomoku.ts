@@ -273,7 +273,15 @@ export class Gomoku {
       }
 
       if (player5Lines.length) {
-        if (this.rules.captureUnperfect && player5Lines.some(({line}) => this.isUnperfect5(line,player)))
+        // Deux façons de survivre au cinq, et elles ne se recouvrent pas :
+        // casser la ligne en prenant une paire dedans, ou compter jusqu'à dix
+        // en prenant une paire n'importe où. Dans les deux cas on accorde le
+        // coup de sursis — la résolution est en tête de cette méthode, et la
+        // victoire par capture y est testée en premier.
+        const breakable = player5Lines.some(({line}) => this.isUnperfect5(line,player))
+        const outcounted = this.score[opponent] >= 8 && this.canCaptureAnyPair(opponent)
+
+        if (this.rules.captureUnperfect && (breakable || outcounted))
           this.delayedWin = true
         else
           return player
@@ -335,6 +343,42 @@ export class Gomoku {
           return true
       }
     }
+    return false
+  }
+
+  // Seconde clause de l'endgame capture du sujet : « If the player has already
+  // lost four pairs and the opponent can capture one more, the opponent wins by
+  // capture. »
+  //
+  // Elle ne se confond pas avec isUnperfect5, qui ne regarde QUE les paires de
+  // l'alignement. Ici la paire peut être n'importe où sur le plateau : à huit
+  // pierres perdues, la prendre porte l'adversaire à dix et gagne sans toucher
+  // à la ligne, qui peut être parfaitement inattaquable.
+  //
+  // Doit rester le miroir exact de Gomoku::capturable côté C++ : les deux
+  // moteurs lisent les mêmes règles, et un désaccord ferait diverger l'issue
+  // affichée par l'UI de celle que le bot calcule.
+  canCaptureAnyPair(taker: Player) {
+    const victim = opponentOf(taker)
+
+    for (let y = 0; y <= this.boardRange; y++)
+      for (let x = 0; x <= this.boardRange; x++) {
+        const pos: Position = [x,y]
+        if (this.stone(pos) !== victim) continue
+
+        for (let delta of SUBDIRECTIONS) {
+          const pos1 = plus(pos,delta,1)
+          const flank0 = minus(pos,delta,1)
+          const flank1 = plus(pos,delta,2)
+
+          if (!this.validPosition(flank0)) continue
+          if (!this.validPosition(flank1)) continue
+          if (this.stone(pos1) !== victim) continue
+          if ((this.stone(flank0) === taker && this.stone(flank1) === null) ||
+              (this.stone(flank1) === taker && this.stone(flank0) === null))
+            return true
+        }
+      }
     return false
   }
 

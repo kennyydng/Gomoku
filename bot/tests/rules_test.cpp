@@ -170,6 +170,74 @@ int main() {
 			"la victoire differee n'est jamais confirmee");
 	}
 
+	// Endgame capture, seconde clause du sujet : « If the player has already
+	// lost four pairs and the opponent can capture one more, the opponent wins
+	// by capture. »
+	//
+	// Elle ne se confond pas avec la premiere. La premiere parle de CASSER la
+	// ligne, donc d'une paire prise DANS l'alignement. Celle-ci parle de
+	// compter : a huit pierres perdues, n'importe quelle paire prise ailleurs
+	// sur le plateau porte l'adversaire a dix et gagne. Un cinq parfait ne
+	// suffit donc plus a conclure.
+	//
+	// Et la troisieme puce dit comment la cabler : « If there is no
+	// possibility of this happening, there is no need to continue the game. »
+	// S'il y a une possibilite, la partie continue d'un coup — le meme
+	// mecanisme de victoire differee que la premiere clause.
+	{
+		// Quatre paires noires offertes puis capturees par blanc, une
+		// cinquieme laissee prenable en (3,8), et un cinq de noir en (5,12)
+		// a (9,12) dont aucune paire n'est prenable.
+		auto setup = []() {
+			Gomoku g{Rules{"911100"}};
+			Pos const moves[] = {
+				{1,0},{0,0}, {2,0},{3,0},    // blanc capture -> 2
+				{1,2},{0,2}, {2,2},{3,2},    // -> 4
+				{1,4},{0,4}, {2,4},{3,4},    // -> 6
+				{1,6},{0,6}, {2,6},{3,6},    // -> 8
+				{1,8},{0,8}, {2,8},{18,18},  // paire prenable en (3,8)
+				{5,12},{18,16}, {6,12},{18,14},
+				{7,12},{18,12}, {8,12},{18,10},
+				{9,12},                      // noir aligne cinq
+			};
+			for (Pos const m : moves)
+				g.play(m);
+			return g;
+		};
+
+		Gomoku g = setup();
+		expect("blanc a bien quatre paires", g.captures(1) == 8);
+		expect("et peut en prendre une cinquieme", g.wouldCapture({3,8}, 1) == 2);
+		expect("le cinq ne conclut pas quand l'adversaire peut compter jusqu'a dix",
+			!g.is_over(),
+			"noir gagne alors que blanc atteint dix prises au coup suivant");
+
+		Gomoku taken = setup();
+		taken.play({3,8});                   // blanc prend la cinquieme paire
+		expect("blanc gagne par capture", taken.is_over() && taken.winner() == 1,
+			"la dixieme pierre prise ne donne pas la victoire");
+
+		Gomoku missed = setup();
+		missed.play({18,8});                 // blanc joue ailleurs
+		expect("sinon le cinq de noir tient", missed.is_over() && missed.winner() == 0,
+			"le cinq n'est jamais confirme");
+
+		// Sans la regle de fin de partie, le cinq conclut immediatement :
+		// cette clause ne doit pas fuir dans les autres jeux de regles.
+		Gomoku off{Rules{"910100"}};
+		Pos const moves[] = {
+			{1,0},{0,0}, {2,0},{3,0}, {1,2},{0,2}, {2,2},{3,2},
+			{1,4},{0,4}, {2,4},{3,4}, {1,6},{0,6}, {2,6},{3,6},
+			{1,8},{0,8}, {2,8},{18,18},
+			{5,12},{18,16}, {6,12},{18,14}, {7,12},{18,12}, {8,12},{18,10},
+			{9,12},
+		};
+		for (Pos const m : moves)
+			off.play(m);
+		expect("regle desactivee : le cinq conclut tout de suite",
+			off.is_over() && off.winner() == 0);
+	}
+
 	// Taille de plateau. Le stockage reste en 19x19, mais un plateau 15x15
 	// doit etre joue comme un 15x15 — sinon le bot propose des coups hors de
 	// la grille affichee, et compte des fenetres qui ne peuvent jamais etre
