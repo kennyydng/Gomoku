@@ -132,6 +132,7 @@ function GomokuBoard({ mode, rules, onUpdate, onBotResponseTime }: GomokuBoardPr
   }
 
   const handleAIHint = async (controller: AbortController) => {
+    setHintCell(null);
     const pos = await fetchBotMove(controller)
     if (pos) setHintCell(pos)
   }
@@ -156,6 +157,16 @@ function GomokuBoard({ mode, rules, onUpdate, onBotResponseTime }: GomokuBoardPr
       <div className="relative mx-auto w-full max-w-[min(88vmin,76vh,720px)] sm:max-w-[min(84vmin,72vh,680px)]">
         <div className="mb-3 flex justify-end">
           <div className="flex gap-3">
+            {(shouldSuggestMove) && (
+              <button
+                type="button"
+                onClick={handleAIHint}
+                disabled={!isHumanMove}
+                className="rounded-full border border-amber-400/20 bg-amber-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-amber-100 transition hover:border-amber-400/40 hover:bg-amber-300/15 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Get hint
+              </button>
+            )}
             <button
               type="button"
               onClick={handleUndo}

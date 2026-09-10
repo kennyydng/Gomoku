@@ -5,4 +5,4 @@
 # les deux. Les options vivent dans le Makefile, que le sujet exige de toute
 # façon : ce script n'est plus qu'un point d'entrée stable pour les appelants
 # qui ne veulent pas connaître make.
-exec make -C "$(dirname "$0")" "$@"
+exec make -r -C "$(dirname "$0")" "$@"

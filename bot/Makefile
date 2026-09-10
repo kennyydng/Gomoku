@@ -14,32 +14,52 @@
 
 NAME = Gomoku
 
-CXX = g++
-CXXFLAGS = -std=c++26 -freflection -fcontract-evaluation-semantic=ignore \
-	   -O2 -mavx2 -Wall -Wextra -Werror -pedantic -I inc
+S=src
+O=obj
+I=inc
 
-SRC = src/main.cpp src/Gomoku.cpp
-OBJ_DIR = obj
-OBJ = $(SRC:src/%.cpp=$(OBJ_DIR)/%.o)
-DEP = $(OBJ:.o=.d)
+PROFILE = 
 
-.PHONY: all clean fclean re
+CXX = g++ -std=c++26 -freflection
+CXXINC = -I $I
+CXXDIAG = -Wall -Wextra -Werror -pedantic 
+
+CXXPROFILE = -frecord-gcc-switches
+#CXXPROFILE += -O3 -mavx2
+CXXPROFILE = -Og
+CXXPROFILE += -pg
+CXXPROFILE += -fcontract-evaluation-semantic=ignore
+
+CXXFLAGS = $(CXXINC) $(CXXPROFILE) $(CXXDIAG)
+
+SRC=$S/main.cpp $S/Gomoku.cpp
+OBJ = $(SRC:$S/%=$O/%.o)
+DEP = $(OBJ:%=%.d)
+
+diff = $(filter-out $1,$2)$(filter-out $2,$1)
+REDO = $(if $(call diff,$(CXXPROFILE),$(CXXPROFILE_OLD)),force)
+
+.PHONY: all clean fclean re force
+.SECONDEXPANSION:
 
 all: $(NAME)
 
 $(NAME): $(OBJ)
-	$(CXX) $(CXXFLAGS) $(OBJ) -o $(NAME)
+	$(CXX) -o $(NAME) $(OBJ) $(CXXFLAGS)
 
-$(OBJ_DIR)/%.o: src/%.cpp | $(OBJ_DIR)
-	$(CXX) $(CXXFLAGS) -MMD -MP -c $< -o $@
-
-$(OBJ_DIR):
-	mkdir -p $(OBJ_DIR)
+#RE = $(info $(TEST))
+$O/%.o: SRC=$S/$*
+$O/%.o: $(SRC) $$(REDO) | $O/
+	$(CXX) -o $@ -c $(SRC) $(CXXFLAGS) -MMD -MP -MF $(DEP)
+	@echo "$@: CXXPROFILE_OLD=$(CXXPROFILE)" >> $(DEP)
 
 -include $(DEP)
 
+%/:
+	mkdir -p $@
+
 clean:
-	rm -rf $(OBJ_DIR)
+	rm -rf $O
 
 fclean: clean
 	rm -f $(NAME)

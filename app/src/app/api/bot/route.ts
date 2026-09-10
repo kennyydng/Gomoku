@@ -52,7 +52,8 @@ export async function POST(request: Request) {
 
   const state = `${gridToken}${rulesPayload}\n${moves.map(([x,y]) => `|${x}:${y}`).join('')}`;
 
-  execSync(BOT_BUILD, {cwd: BOT_CWD});
+  console.log("(Re)building bot...");
+  execSync(BOT_BUILD, {cwd: BOT_CWD, stdio: 'inherit'})
 
   console.log("Asking bot for move...");
   const startTime = Date.now();
