@@ -75,6 +75,8 @@ function GomokuBoard({ mode, rules, onUpdate, onBotResponseTime }: GomokuBoardPr
     }
   }
 
+  useEffect(() => {setHintCell(null)}, [game])
+
   const fetchBotMove = async (controller: AbortController) => {
     onBotResponseTime?.("pending")
     try {
