@@ -68,6 +68,8 @@ export async function POST(request: Request) {
   });
   const time = Date.now() - startTime;
 
+  execSync(`[ ! -f gmon.out ] || gprof ./Gomoku > /var/logs/bot.profile`, {cwd: BOT_CWD})
+
   const result = run.stdout ?? ''
   const diagnostics = run.stderr ?? ''
 

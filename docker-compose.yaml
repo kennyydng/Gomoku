@@ -27,6 +27,11 @@ services:
     # inc et src seulement, pas bot/ entier : le binaire et les objets restent
     # ceux du conteneur. Les monter depuis l'hote y ferait entrer un binaire
     # compile pour une autre architecture des que l'hote n'est pas x86_64.
+    volumes:
+      - ./logs:/var/logs
+      #- ./app/src:/var/www/app/src
+      #- ./bot/inc:/var/www/app/bot/inc
+      #- ./bot/src:/var/www/app/bot/src
     develop:
       watch:
         - action: sync
