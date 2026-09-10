@@ -48,7 +48,7 @@ inline bool attacks(EngineState const &state, Budget &b, int plies,
 		return false;
 
 	const bool me = state.player();
-	const std::vector<Pos> cells = state.emptyNeighbours();
+	const auto cells = state.immediateCandidates();
 
 	// D'abord les gains immédiats : inutile de chercher une séquence quand un
 	// seul coup suffit. wouldWin() lit les fenêtres, donc on CONFIRME en
@@ -94,7 +94,7 @@ inline bool defends(EngineState const &state, Budget &b, int plies) {
 	//   - TOUTE capture, même sans rapport apparent avec l'alignement : elle
 	//     peut en retirer une pierre, et sous cette règle c'est une parade.
 	std::vector<Pos> replies;
-	for (Pos p : state.emptyNeighbours()) {
+	for (Pos p : state.immediateCandidates()) {
 		if (state.game.wouldWin(p, attacker)
 		 || state.game.wouldWin(p, defender)
 		 || state.game.wouldCapture(p, defender))

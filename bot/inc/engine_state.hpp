@@ -114,10 +114,10 @@ struct EngineState {
 	// que le moteur maintient son score par delta — sur main, il fallait une
 	// fonction de notation séparée, qui pesait 83% du temps de recherche.
 	std::vector<Pos> candidates() const {
-			std::vector<Pos> cells = emptyNeighbours();
+			auto cells = immediateCandidates();
 
 			std::vector<std::pair<int,Pos>> scored;
-			scored.reserve(cells.size());
+			scored.reserve(popcount(cells));
 			const bool me = player();
 			for (Pos p : cells) {
 				// moveDelta rend la variation de score dans la convention
@@ -161,31 +161,18 @@ struct EngineState {
 	// Le premier coup a besoin d'un cas particulier : sans pierre sur le
 	// plateau, aucune case n'a de voisin et la liste serait vide, donc la
 	// recherche ne rendrait aucun coup.
-	std::vector<Pos> emptyNeighbours() const {
-			std::vector<Pos> out;
-			if (game.turn() == 0) {
-				const pos_t half = game.rules().size / 2;
-				out.push_back(Pos{half, half});
-				return out;
+	BitBoard<0> immediateCandidates() const {
+			Let p0 = game.player_info(0);
+			Let p1 = game.player_info(1);
+
+			BitBoard<0> all{p0.stones + p1.stones};
+			BitBoard<0> set{CENTER};
+			template for (constexpr auto dir : DIRECTIONS) {
+				set += all.shift(dir*1);
 			}
-			for (Pos const pos : Pos::all()) {
-				// Pos::all() balaie la grille de stockage ; sur un plateau
-				// plus petit, les dernières lignes n'existent pas dans le jeu.
-				if (!game.onBoard(pos) || !game.stone(pos).empty())
-					continue;
-				bool near = false;
-				template for (constexpr auto dir : DIRECTIONS) {
-					if (!near) {
-						Pos a = pos + dir, b = pos - dir;
-						if ((a.valid() && !game.stone(a).empty())
-						 || (b.valid() && !game.stone(b).empty()))
-							near = true;
-					}
-				}
-				if (near)
-					out.push_back(pos);
-			}
-			return out;
+			set -= all;
+
+			return set;
 		}
 };
 
