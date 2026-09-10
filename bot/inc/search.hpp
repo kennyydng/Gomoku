@@ -23,6 +23,10 @@
 #include <optional>
 #include <vector>
 
+#ifndef BUDGET
+# define BUDGET 1
+#endif
+
 namespace search {
 
 // --- Ce que la recherche exige de l'état de jeu ---------------------------
@@ -48,10 +52,10 @@ concept State = requires(S const cs, typename S::move_t m) {
 };
 
 struct Limits {
-	std::chrono::milliseconds budget{460};
+	std::chrono::milliseconds budget{460*BUDGET};
 	// Le sujet exige *toujours* au moins minDepth plis. Les profondeurs
 	// jusque-là ont un plafond élargi ; au-delà, le budget normal s'applique.
-	std::chrono::milliseconds hardBudget{800};
+	std::chrono::milliseconds hardBudget{800*BUDGET};
 	int minDepth = 10;
 	int maxDepth = 14;
 	// Cinq candidats était le réglage de main, où six sortait du budget de

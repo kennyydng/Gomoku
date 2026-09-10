@@ -22,12 +22,15 @@ PROFILE =
 
 CXX = g++ -std=c++26 -freflection
 CXXINC = -I $I
+
 CXXDIAG = -Wall -Wextra -Werror -pedantic 
+CXXDIAG += -fdiagnostics-color=always
 
 CXXPROFILE = -frecord-gcc-switches
-#CXXPROFILE += -O3 -mavx2
-CXXPROFILE = -Og
+CXXPROFILE += -O3 -mavx2
+#CXXPROFILE = -Og
 CXXPROFILE += -pg
+#CXXPROFILE += -DBUDGET=10
 CXXPROFILE += -fcontract-evaluation-semantic=ignore
 
 CXXFLAGS = $(CXXINC) $(CXXPROFILE) $(CXXDIAG)
