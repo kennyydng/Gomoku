@@ -1,5 +1,6 @@
 
 #include <iostream>
+#include <contracts>
 #include <cstdlib>
 
 #include "engine_state.hpp"
@@ -131,4 +132,12 @@ int main() try {
 } catch (...) {
 	std::cerr << "Erreur inconnue" << std::endl;
 	return 1;
+}
+
+void handle_contract_violation( std::contracts::contract_violation const &cv ) noexcept {
+	std::source_location loc = cv.location();
+	std::cerr << "Contract violation in " << loc.file_name() << ":" << loc.line() << std::endl;
+	std::cerr << "[" << loc.function_name() << "]" << std::endl;
+
+	std::cerr << cv.comment() << std::endl;
 }
