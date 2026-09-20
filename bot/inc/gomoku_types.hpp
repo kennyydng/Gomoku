@@ -9,7 +9,7 @@
 
 using pos_t = int;
 
-constexpr pos_t SIZE = 19;
+static_assert(SIZE & 1); // SIZE must be even
 constexpr pos_t HALF = SIZE/2;
 
 struct Dir {
@@ -57,7 +57,7 @@ struct Pos {
 		{ return os << (int)pos.x << ":" << (int)pos.y; }
 
 	static constexpr auto all() {
-			constexpr auto coords = sets::all_of<pos_t(SIZE)>();
+			constexpr auto coords = sugar::natural_index<pos_t(SIZE)>;
 			return sugar::product(coords,coords) | [](pos_t x, pos_t y){
 				return Pos{x,y};
 			};

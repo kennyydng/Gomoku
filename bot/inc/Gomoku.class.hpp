@@ -65,13 +65,6 @@ struct Move {
 // façon, sinon ils ne jouent pas au même jeu — et aucune comparaison entre
 // eux ne veut plus rien dire.
 struct Rules {
-	// Le plateau logique. Le stockage reste dimensionné pour 19x19 — les
-	// BitBoard sont des types paramétrés à la compilation — mais un plateau
-	// plus petit est joué correctement : les cases hors limites ne sont
-	// jamais candidates, et les fenêtres qui en débordent sortent du
-	// comptage (Gomoku::restrictToBoard).
-	pos_t size = SIZE;
-
 	bool capture = false;
 	bool captureUnperfect = false;
 
@@ -87,11 +80,8 @@ struct Rules {
 	// Six caractères : taille, capture, capture imparfaite, overline,
 	// double-trois, double-quatre.
 	explicit Rules(std::string const &str) {
-			if (str.size() != 6)
+			if (str.size() != 5)
 				throw std::runtime_error("Invalid rules");
-			if      (str[0] == '5') size = 15;
-			else if (str[0] == '9') size = 19;
-			else throw std::runtime_error("Invalid grid size");
 
 			capture          = (str[1] == '1');
 			captureUnperfect = (str[2] == '1');
@@ -133,66 +123,14 @@ struct Threat {
 	Dir dir{};
 };
 
-// L'ensemble des fenêtres de cinq qui tiennent sur un plateau n x n, dans
-// l'orientation AX.
-//
-// CONVENTION, vérifiée expérimentalement et non déduite : make_line(pos)
-// couvre les indices pos..pos+4, donc une pierre en `pos` compte dans les
-// fenêtres d'indices pos..pos+4 — autrement dit la fenêtre d'indice `i`
-// couvre les cases i-4a..i, et elle est repérée par sa DERNIÈRE case.
-//
-// Construit case par case plutôt que par décalage du plateau plein. Un
-// `shift` de ±4 donne le bon ensemble sur les lignes et les colonnes, mais
-// pas sur les diagonales : la représentation diagonale enroule les lignes, et
-// le décalage fabrique des fenêtres qui traversent un bord. Mesuré : la case
-// (0,0), dont l'antidiagonale ne fait qu'une case de long, se voyait
-// attribuer cinq fenêtres. Ici le critère est explicite — une fenêtre est
-// valide si ses DEUX extrémités sont sur le plateau, les cases intermédiaires
-// suivant puisque l'axe est une droite. Voir tests/edge_test.cpp.
-// La direction que traite REELLEMENT la disposition d'indice AX.
-//
-// Le tableau AXES et les BitBoard ne s'accordent pas sur les diagonales : la
-// disposition d'indice 2 traite (1,-1) et celle d'indice 3 traite (1,1), soit
-// l'inverse de AXES[2] et AXES[3]. C'est la transformation diagonale qui le
-// veut — pour AX=2 elle envoie (x,y) sur (x, y+x), et ce sont les cases de
-// l'ANTIdiagonale qui s'y retrouvent alignées sur une même ligne de bits.
-//
-// Vérifié expérimentalement, pas déduit : deux pierres adjacentes selon
-// (1,1) font apparaître une fenêtre à deux pierres sur l'axe 3, pas l'axe 2.
-// Confondre les deux fait compter les fenêtres diagonales dans la mauvaise
-// direction, ce qui ne se voit qu'au bord — au milieu du plateau les deux
-// diagonales se ressemblent trop.
 template<size_t AX>
 constexpr Dir LAYOUT_AXIS = AXES[AX < 2 ? AX : 5 - AX];
-
-template<size_t AX>
-constexpr BitBoard<AX> makeLines(pos_t n) {
-	BitBoard<AX> lines{};
-	for (pos_t y = 0; y < n; y++)
-		for (pos_t x = 0; x < n; x++) {
-			const pos_t sx = x - LAYOUT_AXIS<AX>.x * 4;
-			const pos_t sy = y - LAYOUT_AXIS<AX>.y * 4;
-			if (unsigned(sx) < unsigned(n) && unsigned(sy) < unsigned(n))
-				lines += BitBoard<AX>(Pos{x, y});
-		}
-	return lines;
-}
 
 class Gomoku {
 public:
 	Gomoku() = default;
-	explicit Gomoku(Rules rules): _rules(rules) {
-			if (_rules.size < SIZE)
-				restrictToBoard();
-		}
+	explicit Gomoku(Rules rules): _rules(rules) {}
 
-	// Une case est-elle sur le plateau LOGIQUE ? Pos::valid() ne connaît que
-	// la grille de stockage (19x19) ; sur un plateau 15x15, les quatre
-	// dernières lignes et colonnes existent en mémoire mais pas dans le jeu.
-	bool onBoard(Pos pos) const {
-			return unsigned(pos.x) < unsigned(_rules.size)
-			    && unsigned(pos.y) < unsigned(_rules.size);
-		}
 	Gomoku(Gomoku const &) = default;
 	~Gomoku() {}
 
@@ -345,12 +283,6 @@ public:
 	void pass();
 
 private:
-	// Retire du comptage toute fenêtre qui déborde du plateau logique. Sans
-	// ça, une fenêtre de cinq débordant à droite ou en bas serait comptée
-	// comme vivante alors qu'elle ne peut jamais être complétée : le moteur
-	// surévaluerait les bords et s'y collerait.
-	void restrictToBoard();
-
 	void place(Pos, bool);
 	void unplace(Pos, bool);
 	bool threatensAt(Pos, bool, size_t) const;

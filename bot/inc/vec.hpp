@@ -108,8 +108,8 @@ namespace vec {
 		constexpr data(vec_like Take v)
 			{ for (auto i : v.vindex()) operator[](i) = v[i]; }
 
-		INLINE constexpr T &operator[](index_type i) TO( _data[domain.rank_of(i)] )
-		INLINE constexpr T operator[](index_type i) const TO( _data[domain.rank_of(i)] )
+		INLINE constexpr T &operator[](index_type i) TO( _data[domain.rank_of(*i)] )
+		INLINE constexpr T operator[](index_type i) const TO( _data[domain.rank_of(*i)] )
 
 		constexpr static vindex_type vindex() { return {}; }
 
@@ -129,7 +129,7 @@ namespace vec {
 	constexpr auto compute(vec_like Take v) requires sets::is_opt<decltype(v.vindex())> {
 			using value_type = std::decay_t<decltype(v)>::value_type;
 			auto idx = v.vindex();
-			return homogen(idx ? v[*idx] : value_type(), idx);
+			return homogen(idx ? v[idx] : value_type(), idx);
 		}
 
 	template<char const *S>

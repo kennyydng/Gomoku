@@ -83,8 +83,8 @@ namespace sets {
 	{
 	public:
 		consteval all_of<D...> operator~() const { return {}; };
-		constexpr auto operator|(this none, set_of<D...> Take lhs) AS( lhs )
-		constexpr auto operator^(this none, set_of<D...> Take lhs) AS( lhs )
+		constexpr auto operator|(this none, set_of<D...> Take rhs) AS( rhs )
+		constexpr auto operator^(this none, set_of<D...> Take rhs) AS( rhs )
 		consteval auto operator&(this none, set_of<D...> Take    ) TO( none{} )
 
 		consteval auto iterator   () const TO( nullptr )
@@ -106,10 +106,12 @@ namespace sets {
 		//constexpr one(): value() { static_assert(domain.has(value_type())); }
 		constexpr explicit one(value_type value): value( domain.checked(value) ) {}
 
-		//constexpr bool operator==(one rhs) const { return value == rhs.value; }
-		constexpr operator value_type() const TO( domain.assumed(value) )
+		//constexpr explicit operator value_type() const TO( domain.assumed(value) )
+		constexpr bool operator==(this one let lhs, one let rhs) { return lhs.value == rhs.value; }
+		constexpr value_type operator*() const TO( domain.assumed(value) )
 
 		constexpr set::part operator~() const { return ~set::part(value); };
+		constexpr auto operator|(this one let lhs, one let rhs) AS( opt{*lhs, lhs == rhs} )
 
 		consteval auto iterator   () const TO( true )
 
@@ -135,15 +137,16 @@ namespace sets {
 			: has(has) { if (has) value = forward(init); }
 
 		//constexpr bool operator==(opt rhs) const TO( has == rhs.has && (!has || value == rhs.value) )
+		constexpr operator one() const TO( (one)operator*() )
 		constexpr explicit operator bool() const TO( has )
 
-		constexpr auto operator*() const { contract_assert(has); return one(domain.assumed(value)); }
+		constexpr value_type operator*() const pre(has) TO( domain.assumed(value) )
 
 		//constexpr set::part operator~() const { return ~(has ? set::part(value_type(*this)) : set::part()); };
 
 		constexpr auto iterator   () const TO( has )
 
-		constexpr auto dereference() const TO( [&](bool  ) TO( operator*() ) )
+		constexpr auto dereference() const TO( [&](bool  ) TO( operator one() ) )
 		constexpr auto increment  () const TO( [ ](bool var i) { i = false; } )
 		constexpr auto sentinel   () const TO( [ ](bool i) TO( !i ) )
 		constexpr auto distance   () const TO( [ ](bool i) TO(  i ) )
@@ -168,7 +171,7 @@ namespace sets {
 		constexpr explicit part(set::none) {}
 		constexpr explicit part(set::all) : _bits(mask) {}
 		constexpr explicit part(bool all) : _bits(all ? mask : 0) {}
-		constexpr part(one e) { _bits = bitset(1) << domain.rank_of(e); }
+		constexpr part(one e) { _bits = bitset(1) << domain.rank_of(*e); }
 		constexpr part(opt e) { if (e) _bits = bitset(1) << domain.rank_of(*e); }
 
 		//	constexpr bool operator==(sentinel) const { return _bits; }
@@ -195,7 +198,7 @@ namespace sets {
 			}
 
 		constexpr operator bool() const TO( _bits )
-		constexpr bool has(one e) const TO( _bits & bitset(1) << domain.rank_of(e) )
+		constexpr bool has(one e) const TO( _bits & bitset(1) << domain.rank_of(*e) )
 
 		constexpr bool operator==(part rhs) const TO( _bits == rhs._bits )
 
@@ -206,8 +209,8 @@ namespace sets {
 		constexpr part operator<<(int rhs) const TO( {mask & (_bits << rhs), 0} )
 		constexpr part operator>>(int rhs) const TO( {mask & (_bits >> rhs), 0} )
 
-		constexpr auto operator&(this part lhs, one rhs) TO( opt( rhs,        lhs.has( rhs)) )
-		constexpr auto operator&(this part lhs, opt rhs) TO( opt(*rhs, rhs && lhs.has(*rhs)) )
+		constexpr auto operator&(this part lhs, one rhs) TO( opt(*rhs,        lhs.has(rhs)) )
+		constexpr auto operator&(this part lhs, opt rhs) TO( opt(*rhs, rhs && lhs.has(rhs)) )
 
 		constexpr part operator&(this part lhs, part rhs) TO( {lhs._bits & rhs._bits, 0} )
 		constexpr part operator|(this part lhs, part rhs) TO( {lhs._bits | rhs._bits, 0} )

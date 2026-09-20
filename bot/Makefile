@@ -12,13 +12,15 @@
 # par la représentation bitboard — d'où l'image Arch avec GCC 16 du projet. Un
 # GCC de distribution plus ancien ne compilera pas ce moteur.
 
-NAME = Gomoku
+ifndef SIZE
+$(error SIZE must be defined)
+endif
+
+NAME = Gomoku$(SIZE)
 
 S=src
-O=obj
+O=obj/$(SIZE)
 I=inc
-
-PROFILE = 
 
 CXX = g++ -std=c++26 -freflection
 CXXINC = -I $I
@@ -35,6 +37,8 @@ CXXPROFILE += -fcontract-evaluation-semantic=ignore
 
 CXXFLAGS = $(CXXINC) $(CXXPROFILE) $(CXXDIAG)
 
+CXXFLAGS += -DSIZE=$(SIZE)
+
 SRC=$S/main.cpp $S/Gomoku.cpp
 OBJ = $(SRC:$S/%=$O/%.o)
 DEP = $(OBJ:%=%.d)
@@ -42,8 +46,8 @@ DEP = $(OBJ:%=%.d)
 diff = $(filter-out $1,$2)$(filter-out $2,$1)
 REDO = $(if $(call diff,$(CXXPROFILE),$(CXXPROFILE_OLD)),force)
 
-.PHONY: all clean fclean re force
 .SECONDEXPANSION:
+.PHONY: all clean fclean re force
 
 all: $(NAME)
 

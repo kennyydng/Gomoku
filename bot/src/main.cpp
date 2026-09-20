@@ -45,7 +45,7 @@ int main() try {
 		// Pos::valid() borne aussi les négatifs : x et y sont comparés en
 		// unsigned, donc -3 devient énorme et sort. Sans ce test, un `|99:99`
 		// écrit hors des bitboards.
-		if (!move.valid() || !state.game.onBoard(move)) {
+		if (!move.valid()) {
 			std::cerr << "Coup hors du plateau : " << move << std::endl;
 			return 1;
 		}

@@ -1,6 +1,6 @@
 
 import { NextResponse } from 'next/server'
-import { execSync, spawnSync } from 'child_process';
+import { spawnSync, execSync } from 'child_process';
 import { existsSync } from 'fs';
 import type { Gomoku, Rules, Position } from '../../game/Gomoku'
 
@@ -22,7 +22,7 @@ const BOT_CWD = existsSync('bot') ? 'bot' : '../bot'
 // oubliant six (sets.hpp, terms.hpp, vec.hpp, sugar.hpp, macros.hpp,
 // parsing_utils.hpp) — les modifier ne déclenchait aucune recompilation, et le
 // bot répondait avec du code périmé. make lit les vraies dépendances (-MMD).
-const BOT_BUILD = 'sh build.sh'
+const BOT_BUILD = './build.sh'
 
 export async function POST(request: Request) {
   const { game: {rules, moves} } = (await request.json()) as { game: Gomoku }
@@ -30,7 +30,19 @@ export async function POST(request: Request) {
   if (!Array.isArray(moves))
     throw new Error("Invalid move list!")
 
-  const gridToken = rules.grid === '15x15' ? '5' : '9'
+  let SIZE;
+  switch (rules.grid) {
+    case '15x15':
+      SIZE = 15
+      break
+    case '19x19':
+      SIZE = 19
+      break
+    default:
+      throw `Invalid size ${rules.grid}`
+  }
+  const exec = `./Gomoku${SIZE}`
+
   const overlineToken: Record<Rules['overline'], string> = {
     win: '1',
     legal: '0',
@@ -50,10 +62,10 @@ export async function POST(request: Request) {
       })
       .join('')
 
-  const state = `${gridToken}${rulesPayload}\n${moves.map(([x,y]) => `|${x}:${y}`).join('')}`;
+  const state = `${rulesPayload}\n${moves.map(([x,y]) => `|${x}:${y}`).join('')}`;
 
   console.log("(Re)building bot...");
-  execSync(BOT_BUILD, {cwd: BOT_CWD, stdio: 'inherit'})
+  spawnSync(BOT_BUILD, ["-E",`SIZE=${SIZE}`], {cwd: BOT_CWD, stdio: 'inherit'})
 
   console.log("Asking bot for move...");
   const startTime = Date.now();
@@ -63,12 +75,12 @@ export async function POST(request: Request) {
   // portée de l'interface. Le sujet les réclame explicitement : « some sort of
   // debugging process that lets you examine the reasoning process of your AI
   // while it's running… it would help during your defense sessions ».
-  const run = spawnSync("./Gomoku", {
+  const run = spawnSync(exec, {
     cwd: BOT_CWD, input: state, timeout: 500000, encoding: 'utf8',
   });
   const time = Date.now() - startTime;
 
-  execSync(`[ ! -f gmon.out ] || gprof ./Gomoku > /var/logs/bot.profile`, {cwd: BOT_CWD})
+  execSync(`[ ! -f gmon.out ] || gprof ${exec} > /var/logs/bot.profile`, {cwd: BOT_CWD})
 
   const result = run.stdout ?? ''
   const diagnostics = run.stderr ?? ''

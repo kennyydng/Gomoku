@@ -128,7 +128,7 @@ class BitBoard : public auto_range {
 	using one_bit = size_t;
 
 	static constexpr /*words_type*/ auto
-		Y_MASK = vec::func([](int i){
+		Y_MASK = vec::func([](index_type i){
 			return (1ull << (i == LAST_WORD ? X_LAST_WORD : X_PER_WORD)) - 1ull;
 		}, sets::all_of<WORD_COUNT>() );
 
@@ -145,10 +145,8 @@ class BitBoard : public auto_range {
 		{ update_index(index); }
 	constexpr void update_index(vec::index_for<words_type> Take where) {
 			index_type empty{};
-			for (auto i : where) {
-				contract_assert(index_type::domain.has(i));
+			for (auto i : where)
 				if (!words[i]) empty |= i;
-			}
 			index ^= empty;
 		}
 
@@ -258,9 +256,9 @@ private:
 				// static constexpr DE = DS << X;
 
 				static constexpr /*words_type*/ auto
-					Y_MASK0 = vec::func([](Take i) TO( ((DS << (1+i*Y_PER_WORD)) - XS) & Y_MASK[i] ), sets::all_of<WORD_COUNT>() );
+					Y_MASK0 = vec::func([](Take i) TO( ((DS << (1+(*i)*Y_PER_WORD)) - XS) & Y_MASK[i] ), sets::all_of<WORD_COUNT>() );
 				static constexpr /*words_type*/ auto
-					Y_MASK1 = vec::func([](Take i) TO( (XE - (DS << (1+i*Y_PER_WORD))) & Y_MASK[i] ), sets::all_of<WORD_COUNT>() );
+					Y_MASK1 = vec::func([](Take i) TO( (XE - (DS << (1+(*i)*Y_PER_WORD))) & Y_MASK[i] ), sets::all_of<WORD_COUNT>() );
 
 				// Due to contraints on shift.x, bits of d_start are always lesser then bits of d_end
 				// Additionally, contraints on Y_PER_WORD ensure that d_end fits inside the word
@@ -269,7 +267,7 @@ private:
 				word d_mask = (d_end - d_start);
 
 				return vec::func([x_mask,d_mask](auto i){
-					int y = i*Y_PER_WORD;
+					int y = (*i)*Y_PER_WORD;
 					return x_mask &
 						( ( (d_mask >>-(y+1-Y)) & Y_MASK0[i] )
 						| ( (d_mask << (y+1  )) & Y_MASK1[i] )
@@ -305,10 +303,10 @@ private:
 			auto shift = X * y.rem;
 
 			ret += vec::func([&](auto i) TO(
-				words[ one_word(i - y.quot) ] << shift
+				words[ one_word(*i - y.quot) ] << shift
 			), shl(index, y.quot));
 			ret += vec::func([&](auto i) TO(
-				words[ one_word(i - y.quot - 1) ] >> (X_PER_WORD - shift)
+				words[ one_word(*i - y.quot - 1) ] >> (X_PER_WORD - shift)
 			), shl(index, y.quot + 1));
 
 			if constexpr (DIAGONAL) {
@@ -316,10 +314,10 @@ private:
 				shift = X * y.rem;
 
 				ret += vec::func([&](auto i) TO(
-					words[ one_word(i - y.quot) ] << shift
+					words[ one_word(*i - y.quot) ] << shift
 				), shl(index, y.quot));
 				ret += vec::func([&](auto i) TO(
-					words[ one_word(i - y.quot - 1) ] >> (X_PER_WORD - shift)
+					words[ one_word(*i - y.quot - 1) ] >> (X_PER_WORD - shift)
 				), shl(index, y.quot + 1));
 			}
 			ret.update_index();
@@ -341,7 +339,7 @@ public:
 			};
 			return unflatten(untransform(Pos{
 				bit - y*X,
-				y + pos_t((*i)*Y_PER_WORD)
+				y + pos_t((**i)*Y_PER_WORD)
 			}));
 		} )
 	constexpr auto increment  () const TO( [&](Var i, word var iword) {
@@ -379,13 +377,6 @@ public:
 
 	constexpr const BitBoard<AX> &of(size_t i) const
 		{ return digits[i]; }
-
-	// Restreint le comptage aux fenêtres de `valid`. Les autres n'étant dans
-	// aucun digit, elles ne réapparaissent jamais : += et -= ne font que
-	// déplacer une fenêtre d'un niveau au suivant. Sert aux plateaux plus
-	// petits que la grille de stockage (voir Gomoku::restrictToBoard).
-	constexpr void restrict(BitBoard<AX> let valid)
-		{ digits[0] &= valid; }
 
 	// const : ne lit que `digits`, le seul effet passe par l'updater. C'est ce
 	// qui permet de chiffrer un coup sans le jouer (voir Gomoku::moveDelta).

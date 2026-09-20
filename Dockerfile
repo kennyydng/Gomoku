@@ -22,7 +22,7 @@ WORKDIR bot/
 # figées à la compilation ; elles sont désormais lues sur stdin, donc un seul
 # binaire suffit — et le compiler ici évite de payer la compilation à la
 # première requête.
-RUN sh build.sh
+RUN sh build.sh -E SIZE=19
 WORKDIR ../
 COPY app ./
 COPY docker-entrypoint.sh /var/

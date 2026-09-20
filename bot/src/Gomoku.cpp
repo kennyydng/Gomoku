@@ -27,14 +27,6 @@ std::ostream &operator<<(std::ostream &o, Gomoku const &gomoku) {
 	return o;
 }
 
-void Gomoku::restrictToBoard() {
-	template for (constexpr size_t AX : index_of(AXES)) {
-		// Meme critere que LinesStart, avec la taille reelle du plateau.
-		BitBoard<AX> const valid = makeLines<AX>(_rules.size);
-		std::get<AX>(_info[0].lines).restrict(valid);
-		std::get<AX>(_info[1].lines).restrict(valid);
-	}
-}
 
 void Gomoku::place(Pos pos, bool P) {
 	contract_assert(pos.valid());
@@ -147,19 +139,18 @@ unsigned Gomoku::capturable(bool taker) const {
 		return 0;
 	BitBoard<0> const &T = _info[ taker].stones;
 	BitBoard<0> const &V = _info[!taker].stones;
-	BitBoard<0> const occupied{ T + V };
 	// Complementer un vec creux n'a pas de sens (les mots hors index sont
 	// inconnus, pas nuls) : on part du plateau plein et on retire.
-	BitBoard<0> empty{true};
-	empty -= occupied;
+	BitBoard<0> empty = BitBoard{true} - (T + V);
 
 	unsigned n = 0;
-	template for (constexpr auto d : DIRECTIONS) {
+	template for (constexpr auto AX : index_of(AXES)) {
 		BitBoard<0> const v1 = V.shift(d * -1);
 		BitBoard<0> const v2 = V.shift(d * -2);
 		BitBoard<0> const t3 = T.shift(d * -3);
 		n += (unsigned)vec::sum(vec::popcount(
-			empty & v1.get_words() & v2.get_words() & t3.get_words() ));
+			empty & v1.get_words() & v2.get_words() & t3.get_words()
+		));
 	}
 	return n;
 }
@@ -294,7 +285,7 @@ std::vector<Threat> Gomoku::getThreats(Pos pos, bool player, int min) {
 }
 
 bool Gomoku::isLegalMove(Pos pos, bool player) {
-	if (!pos.valid() || !onBoard(pos) || !stone(pos).empty())
+	if (!pos.valid() || !stone(pos).empty())
 		return false;
 
 	auto const &pr = _rules.players[player];
