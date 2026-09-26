@@ -6,5 +6,5 @@ set -e
 # montées peuvent être plus récentes que le binaire. route.ts sait aussi le
 # refaire à la demande, mais le faire ici évite d'en payer le coût sur la
 # première requête.
-( cd bot && sh build.sh )
+# ( cd bot && sh build.sh )
 npm run dev

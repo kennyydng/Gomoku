@@ -37,6 +37,11 @@ public:
 			}
 		} )
 
+	constexpr score_t &operator+=(score_t let rhs)
+		{ value += rhs.value; return *this; }
+	constexpr score_t &operator-=(score_t let rhs)
+		{ value -= rhs.value; return *this; }
+
 	constexpr std::strong_ordering operator<=>(this score_t const &lhs, score_t const &rhs)
 		{ return lhs.value <=> rhs.value; }
 
@@ -123,6 +128,7 @@ struct Threat {
 	Dir dir{};
 };
 
+// ?????????????
 template<size_t AX>
 constexpr Dir LAYOUT_AXIS = AXES[AX < 2 ? AX : 5 - AX];
 
@@ -158,9 +164,6 @@ public:
 	bool is_over() const
 		{ return _resolved >= 0; }
 
-	auto const &player_info(bool p) const
-		{ return _info[p]; }
-
 	// Qui a gagné, ou -1 si la partie continue. La recherche a besoin du QUI
 	// et pas seulement du SI : sans lui elle ne distingue pas un mat gagnant
 	// d'un mat perdant, et foncerait vers sa propre défaite en croyant gagner.
@@ -178,7 +181,7 @@ public:
 	// quatre mises à jour de CountBoard, 21 à 26 fois par nœud — divisait le
 	// débit par 2.05 : mesuré 81664 nœuds contre 167296 sans le tri, là où le
 	// moteur scalaire de main en fait 125184.
-	long moveDelta(Pos pos, bool P) const;
+	score_t moveDelta(Pos pos, bool P) const;
 
 	// Nombre de pierres que `pos` capturerait pour `P` (0, 2, 4...). Sert au
 	// tri des candidats : moveDelta ne chiffre que les alignements, or une
@@ -263,13 +266,10 @@ public:
 			return h;
 		}
 
-//#if R_CAPTURE
-//	unsigned score(unsigned player) const
-//		{ return captures[player]; };
-//#endif
-
+	BitBoard<0> let stones(bool p) const
+		{ return _stones[p]; }
 	Stone stone(Pos pos) const
-		{ return {player_info(0).stones[pos], player_info(1).stones[pos]}; }
+		{ return {stones(0)[pos], stones(1)[pos]}; }
 
 	template<class F>
 	auto with_move(this Gomoku copy, std::optional<Pos> move, F &&f) {
@@ -290,38 +290,42 @@ private:
 	// Pose/retire une pierre SANS toucher au score ni au hachage : la
 	// détection de menaces n'a besoin que de la géométrie, et place() ferait
 	// payer quatre mises à jour de CountBoard pour rien.
-	void rawPlace (Pos pos, bool p) { _info[p].stones += pos; }
-	void rawRemove(Pos pos, bool p) { _info[p].stones -= pos; }
+	void rawPlace (Pos pos, bool p) { _stones[p] += pos; }
+	void rawRemove(Pos pos, bool p) { _stones[p] -= pos; }
 
 	Threat threatAt(Pos pos, Dir dir, bool player, int min);
 	Threat threatOf(Pos pos, Dir dir, bool player, int min);
 
-	template<size_t AX>
+	template<size_t AX> score_t deltaAlongAxis(Pos pos, bool P) const;
+	template<size_t AX> void placeAlongAxis(Pos pos, bool P);
+	template<size_t AX> void unplaceAlongAxis(Pos pos, bool P);
+
+	template<size_t AX, size_t LEN>
 	static constexpr auto Line(Pos pos)
-		{ return BitBoard<AX>::make_line(pos,5); }
+		{ return BitBoard<AX>::make_line(pos,LEN); }
 
 	template<size_t AX>
-	static constexpr BitBoard<AX> LinesStart = makeLines<AX>(SIZE);
+	struct AlongAxis {
+		template<size_t LEN>
+		static constexpr BitBoard<AX> LinesStart = BitBoard<AX>(true).shift(AXES[AX] * (1-LEN));
 
-	struct PlayerInfo {
-		BitBoard<0> stones = {};
+		CountBoard<AX,5> fives[2] = { LinesStart<5>, LinesStart<5> };
 
-		std::tuple<CountBoard<0,6>, CountBoard<1,6>, CountBoard<2,6>, CountBoard<3,6>>
-			lines = { LinesStart<0>, LinesStart<1>, LinesStart<2>, LinesStart<3> };
-//#if R_CAPTURE && R_CAPTURE_UNPERFECT
-//		BitBoard lines5[4] = {};
-//#endif
-//
-//		//BitBoard closed[2][1][4];
-//
 //#if R_CAPTURE
-//		unsigned captures = {0,0};
-//		BitBoard vulnerable;
+		CountBoard<AX,2> vulnerable[2] = { LinesStart<4>, LinesStart<4> };
+		CountBoard<AX,2> flanked[2] = { LinesStart<4>, LinesStart<4> };
 //#endif
-	} _info[2] = {};
+	};
+
+	// Reworked memory layout for more efficient memory access pattern
+	std::tuple<
+		AlongAxis<0>, AlongAxis<1>, AlongAxis<2>, AlongAxis<3>
+	> _lines{};
+
+	BitBoard<0> _stones[2] = {};
+	unsigned _captures[2] = {};
 
 	unsigned _turn = 0;
-	unsigned _captures[2] = {0, 0};
 
 	// Issue de la partie, fixée une fois pour toutes par play(). -1 = en
 	// cours ; une partie gagnée le reste.
@@ -340,20 +344,7 @@ private:
 	// Clés de Zobrist : une par (case, joueur), tirées une fois pour toutes.
 	// Le XOR étant involutif, poser puis retirer une pierre rend le hachage
 	// initial — ce qui rend le hachage indépendant de l'ordre des coups.
-	static std::uint64_t const &zobristKey(Pos pos, bool player) {
-			static std::uint64_t keys[SIZE*SIZE][2] = {};
-			static bool init = [](){
-				std::uint64_t s = 0x9E3779B97F4A7C15ull;
-				for (auto &cell : keys)
-					for (auto &k : cell) {
-						s ^= s << 13; s ^= s >> 7; s ^= s << 17;
-						k = s;
-					}
-				return true;
-			}();
-			(void)init;
-			return keys[pos.y * SIZE + pos.x][player];
-		}
+	static std::uint64_t zobristKey(Pos pos, bool player);
 
 	friend std::ostream &operator<<(std::ostream &o, Gomoku const &gomoku);
 	friend BitBoard<0> candidates(Gomoku &state);

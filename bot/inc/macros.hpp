@@ -16,4 +16,4 @@
 #define TRY_AS(...) -> decltype(auto) requires requires { (__VA_ARGS__); } { return (__VA_ARGS__); }
 
 #define NOINLINE [[gnu::noinline]]
-#define INLINE [[gnu::always_inline]]
+#define INLINE [[gnu::always_inline]] inline

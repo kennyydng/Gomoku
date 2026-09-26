@@ -132,7 +132,7 @@ struct EngineState {
 				// le point de vue est explicite, et le piège disparaît avec la
 				// copie d'état — mais le test d'ordre reste : il avait déjà
 				// attrapé une inversion qui faisait rater un cinq immédiat.
-				long d = game.moveDelta(p, me);
+				long d = game.moveDelta(p, me).raw();
 				// Gain marginal de la capture, dans la même échelle : la
 				// dérivée du terme quadratique, donc la 5e paire pèse bien
 				// plus que la 1re. Toujours dans la convention interne.
@@ -147,11 +147,11 @@ struct EngineState {
 			// Tri décroissant : le meilleur d'abord, ce dont PVS dépend
 			// entièrement pour que ses fenêtres nulles tiennent.
 			std::sort(scored.begin(), scored.end(),
-				[](auto const &a, auto const &b){ return a.first > b.first; });
+				[](Let a, Let b){ return a.first > b.first; });
 
 			std::vector<Pos> out;
 			out.reserve(scored.size());
-			for (auto const &[s, p] : scored)
+			for (Let [s, p] : scored)
 				out.push_back(p);
 			return out;
 		}
@@ -162,14 +162,10 @@ struct EngineState {
 	// plateau, aucune case n'a de voisin et la liste serait vide, donc la
 	// recherche ne rendrait aucun coup.
 	BitBoard<0> immediateCandidates() const {
-			Let p0 = game.player_info(0);
-			Let p1 = game.player_info(1);
-
-			BitBoard<0> all{p0.stones + p1.stones};
+			BitBoard<0> all{game.stones(0) + game.stones(1)};
 			BitBoard<0> set{CENTER};
-			template for (constexpr auto dir : DIRECTIONS) {
+			template for (constexpr auto dir : DIRECTIONS)
 				set += all.shift(dir*1);
-			}
 			set -= all;
 
 			return set;

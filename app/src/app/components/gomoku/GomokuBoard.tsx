@@ -80,7 +80,7 @@ function GomokuBoard({ mode, rules, onUpdate, onBotResponseTime }: GomokuBoardPr
   const fetchBotMove = async (controller: AbortController) => {
     onBotResponseTime?.("pending")
     try {
-      const TIMEOUT = 10000
+      const TIMEOUT = 30000
       const timeoutId = window.setTimeout(() => controller.abort(), TIMEOUT)
 
       const response = await fetch('/api/bot', {
@@ -160,7 +160,7 @@ function GomokuBoard({ mode, rules, onUpdate, onBotResponseTime }: GomokuBoardPr
             {(shouldSuggestMove) && (
               <button
                 type="button"
-                onClick={handleAIHint}
+                onClick={() => handleAIHint(new AbortController())}
                 disabled={!isHumanMove}
                 className="rounded-full border border-amber-400/20 bg-amber-300/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.28em] text-amber-100 transition hover:border-amber-400/40 hover:bg-amber-300/15 disabled:cursor-not-allowed disabled:opacity-40"
               >

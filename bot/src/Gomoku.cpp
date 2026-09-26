@@ -14,81 +14,139 @@ std::ostream &operator<<(std::ostream &o, Gomoku const &gomoku) {
 	o << std::endl;
 	o << "Score: " << gomoku._score << std::endl;
 
-	//o << gomoku.player_info(gomoku.player()).stones;
+	//o << gomoku.player_info(gomoku.player())._stones;
 	for (Pos const pos : Pos::all()) {
 		o << gomoku.stone(pos) << (pos.x == (SIZE-1) ? "\n" : "─");
 	}
 //	for (int i = 0; i < 4; i++) {
 //		for (Pos const pos : Pos::all())
-//			o << (gomoku._info[0].lines[i].of(0)[pos] == 0 ? "0" : "1" ) << (pos.x == 18 ? "\n" : "─");
+//			o << (gomoku._info[0].fives[i].of(0)[pos] == 0 ? "0" : "1" ) << (pos.x == 18 ? "\n" : "─");
 //			//o << (gomoku.LineStart[i][pos] == 0 ? "0" : "1" ) << (pos.x == 18 ? "\n" : "─");
 //		o << std::endl;
 //	}
 	return o;
 }
 
+// Clés de Zobrist : une par (case, joueur), tirées une fois pour toutes.
+// Le XOR étant involutif, poser puis retirer une pierre rend le hachage
+// initial — ce qui rend le hachage indépendant de l'ordre des coups.
+uint64_t Gomoku::zobristKey(Pos pos, bool player) {
+	static struct keys_t {
+		uint64_t of[SIZE][SIZE][2];
+		constexpr keys_t() {
+			uint64_t s = 0x9E3779B97F4A7C15ull;
+			for (Take [x,y,p] : sugar::product(
+				sugar::natural_index<SIZE>,
+				sugar::natural_index<SIZE>,
+				sugar::natural_index<2>
+			)) {
+				s ^= s << 13; s ^= s >> 7; s ^= s << 17;
+				of[x][y][p] = s;
+			}
+		}
+	} keys = {};
+	return keys.of[pos.x][pos.y][player];
+}
+
+template<size_t AX>
+INLINE score_t Gomoku::deltaAlongAxis(Pos pos, bool P) const {
+	auto const line = Line<AX,5>(pos);
+
+	score_t score{};
+
+	Let [fives,... _] = std::get<AX>(_lines);
+	fives[ P].score( compute(fives[!P].of(0) & line), score.upgrade_updater(P) );
+	fives[!P].score( compute(fives[ P].of(0) & line), score.block_updater(P)   );
+
+	return score;
+}
+
+template<size_t AX>
+INLINE void Gomoku::placeAlongAxis(Pos pos, bool P) {
+	auto const line5 = Line<AX,5>(pos);
+	auto const line2 = Line<AX,2>(pos+AXES[AX]);
+	auto const ends2 = compute( vec::reindex(Line<AX,4>(pos) ^ line2, line2.vindex()) );
+
+	Var [
+		fives,
+		vulnerable,
+		flanked
+	] = std::get<AX>(_lines);
+
+	fives[P]      += line5;
+	vulnerable[P] += line2;
+	flanked[!P]   += ends2;
+}
+
+template<size_t AX>
+INLINE void Gomoku::unplaceAlongAxis(Pos pos, bool P) {
+	auto const line5 = Line<AX,5>(pos);
+	auto const line2 = Line<AX,2>(pos+AXES[AX]);
+	auto const ends2 = compute( vec::reindex(Line<AX,4>(pos) ^ line2, line2.vindex()) );
+
+	Var [
+		fives,
+		vulnerable,
+		flanked
+	] = std::get<AX>(_lines);
+
+	fives[P]      -= line5;
+	vulnerable[P] -= line2;
+	flanked[!P]   -= ends2;
+}
+
+// Update incremental de score, utilisable independament de place/unplace
+score_t Gomoku::moveDelta(Pos pos, bool P) const {
+	contract_assert(pos.valid());
+	contract_assert(stone(pos).empty());
+
+	score_t tmp{};
+	template for (constexpr size_t AX : index_of(AXES))
+		tmp += deltaAlongAxis<AX>(pos, P);
+	return tmp;
+}
 
 void Gomoku::place(Pos pos, bool P) {
 	contract_assert(pos.valid());
 	contract_assert(stone(pos).empty());
-	auto &p0 = _info[ P];
-	auto &p1 = _info[!P];
-	p0.stones += pos;
-	_hash ^= zobristKey(pos, P);   // XOR involutif : symétrique d'un futur take()
+
+	_stones[P] += pos;
+	_hash ^= zobristKey(pos, P);   // XOR involutif : symétrique d'un futur unplace()
+
 	template for (constexpr size_t AX : index_of(AXES)) {
-		auto const line = Line<AX>(pos);
-		auto &p0lines = std::get<AX>(p0.lines);
-		auto &p1lines = std::get<AX>(p1.lines);
-		p0lines.score( compute(p1lines.of(0) & line), _score.upgrade_updater(P) );
-		// block_updater reçoit CELUI QUI BLOQUE, pas celui qui subit. Les
-		// fenêtres adverses tuées doivent être retirées du compte de
-		// l'adversaire, donc ajoutées au signe du bloqueur — et sign_P vaut
-		// -sign_{!P}. Passer !P inversait le terme : bloquer une menace
-		// dégradait l'évaluation de celui qui bloque, ce qui rendait la
-		// défense invisible au tri des candidats et faisait annoncer des mats
-		// forcés inexistants (voir tests/score_debug.cpp).
-		p1lines.score( compute(p0lines.of(0) & line), _score.block_updater(P)   );
-		p0lines += line;
+		_score += deltaAlongAxis<AX>(pos, P);
+		placeAlongAxis<AX>(pos, P);
 	}
 }
 
 // Inverse exact de place() — nommée unplace car `take` est une macro du DSL
 // maison (macros.hpp). L'ordre compte : les masques dépendent de l'état
-// courant, donc il faut d'abord défaire le comptage (p0lines -= line) pour
-// retrouver la configuration d'avant la pose, puis retrancher les mêmes termes.
-//
-// Aucun updater supplémentaire n'est nécessaire : sign_{!P} = -sign_P, donc
-// passer !P donne exactement le terme opposé.
+// courant, donc il faut d'abord défaire le comptage (unplaceAlongAxis) pour
+// retrouver la configuration d'avant la pose, puis retrancher le delta.
 void Gomoku::unplace(Pos pos, bool P) {
 	contract_assert(pos.valid());
-	auto &p0 = _info[ P];
-	auto &p1 = _info[!P];
-	template for (constexpr size_t AX : index_of(AXES)) {
-		auto const line = Line<AX>(pos);
-		auto &p0lines = std::get<AX>(p0.lines);
-		auto &p1lines = std::get<AX>(p1.lines);
-		p0lines -= line;
-		p1lines.score( compute(p0lines.of(0) & line), _score.block_updater(!P)   );
-		p0lines.score( compute(p1lines.of(0) & line), _score.upgrade_updater(!P) );
-	}
-	p0.stones -= pos;
+	contract_assert(!stone(pos).empty() && stone(pos).player() == P);
+
+	_stones[P] -= pos;
 	_hash ^= zobristKey(pos, P);
+
+	template for (constexpr size_t AX : index_of(AXES)) {
+		unplaceAlongAxis<AX>(pos, P);
+		_score -= deltaAlongAxis<AX>(pos, P);
+	}
 }
 
 // `pos` etant vide, les fenetres qui la couvrent gagneraient une pierre de P.
 // Une fenetre ou P a deja `n` pierres et l'adversaire aucune en aurait n+1.
 // On teste donc les fenetres a n pierres, vivantes, couvrant pos.
 bool Gomoku::threatensAt(Pos pos, bool P, size_t n) const {
-	auto const &p0 = _info[ P];
-	auto const &p1 = _info[!P];
 	bool found = false;
 	template for (constexpr size_t AX : index_of(AXES)) {
 		if (!found) {
-			auto const line = Line<AX>(pos);
-			auto const &p0lines = std::get<AX>(p0.lines);
-			auto const &p1lines = std::get<AX>(p1.lines);
-			if (vec::any( vec::compute(
-					p0lines.of(n) & p1lines.of(0) & line) ))
+			auto const line = Line<AX,5>(pos);
+
+			Let [fives,... _] = std::get<AX>(_lines);
+			if (vec::any( fives[P].of(n) & fives[!P].of(0) & line ))
 				found = true;
 		}
 	}
@@ -104,7 +162,7 @@ bool Gomoku::wouldThreatenFive(Pos pos, bool P) const {
 }
 
 bool Gomoku::wouldWin(Pos pos, bool P) const {
-	if (_rules.capture && _captures[P] + wouldCapture(pos, P) >= 10)
+	if (_rules.capture && captures(P) + wouldCapture(pos, P) >= 10)
 		return true;
 	// Une fenetre ou P a deja 4 pierres et l'adversaire aucune : la remplir
 	// fait cinq.
@@ -114,19 +172,15 @@ bool Gomoku::wouldWin(Pos pos, bool P) const {
 // Fenetres vivantes pour P (P y a n pierres, l'adversaire aucune), puis
 // paires de departs consecutifs : voir Gomoku::Threats pour le pourquoi.
 Gomoku::Threats Gomoku::threats(bool P) const {
-	auto const &p0 = _info[ P];
-	auto const &p1 = _info[!P];
 	Threats t;
 	template for (constexpr size_t AX : index_of(AXES)) {
-		auto const &p0lines = std::get<AX>(p0.lines);
-		auto const &p1lines = std::get<AX>(p1.lines);
-		BitBoard<AX> const alive = p1lines.of(0);
-		BitBoard<AX> const a4{ p0lines.of(4) & alive };
-		BitBoard<AX> const a3{ p0lines.of(3) & alive };
-		// LAYOUT_AXIS et non AXES : sur les diagonales, les deux ne
-		// designent pas la meme direction (voir Gomoku.class.hpp).
-		int const n4 = vec::sum(vec::popcount( a4 & a4.shift(LAYOUT_AXIS<AX>) ));
-		int const n3 = vec::sum(vec::popcount( a3 & a3.shift(LAYOUT_AXIS<AX>) ));
+		Let [fives,... _] = std::get<AX>(_lines);
+
+		BitBoard<AX> const alive = fives[!P].of(0);
+		BitBoard<AX> const a4{ fives[P].of(4) & alive };
+		BitBoard<AX> const a3{ fives[P].of(3) & alive };
+		int const n4 = vec::sum(vec::popcount( a4 & a4.shift(AXES[AX]) ));
+		int const n3 = vec::sum(vec::popcount( a3 & a3.shift(AXES[AX]) ));
 		t.open4 += n4;
 		t.open3 += n3;
 		t.axes  += (n4 + n3 > 0);
@@ -137,55 +191,36 @@ Gomoku::Threats Gomoku::threats(bool P) const {
 unsigned Gomoku::capturable(bool taker) const {
 	if (!_rules.capture)
 		return 0;
-	BitBoard<0> const &T = _info[ taker].stones;
-	BitBoard<0> const &V = _info[!taker].stones;
-	// Complementer un vec creux n'a pas de sens (les mots hors index sont
-	// inconnus, pas nuls) : on part du plateau plein et on retire.
-	BitBoard<0> empty = BitBoard{true} - (T + V);
 
 	unsigned n = 0;
 	template for (constexpr auto AX : index_of(AXES)) {
-		BitBoard<0> const v1 = V.shift(d * -1);
-		BitBoard<0> const v2 = V.shift(d * -2);
-		BitBoard<0> const t3 = T.shift(d * -3);
+		Let pairs      = std::get<AX>(_lines).vulnerable[!taker].of(2);
+		Let vulnerable = std::get<AX>(_lines).flanked   [!taker].of(0);
+		Let attacks    = std::get<AX>(_lines).flanked   [ taker].of(1);
 		n += (unsigned)vec::sum(vec::popcount(
-			empty & v1.get_words() & v2.get_words() & t3.get_words()
+			pairs & (vulnerable & attacks)
 		));
 	}
 	return n;
 }
 
-unsigned Gomoku::wouldCapture(Pos pos, bool P) const {
+unsigned Gomoku::wouldCapture(Pos pos, bool taker) const {
 	if (!_rules.capture)
 		return 0;
+
 	unsigned taken = 0;
-	template for (constexpr auto dir : DIRECTIONS) {
-		const Pos p1 = pos + dir;
-		const Pos p2 = p1  + dir;
-		const Pos p3 = p2  + dir;
-		if (p3.valid()
-		 && !stone(p1).empty() && stone(p1).player() != P
-		 && !stone(p2).empty() && stone(p2).player() != P
-		 && !stone(p3).empty() && stone(p3).player() == P)
-			taken += 2;
+	template for (constexpr auto AX : index_of(AXES)) {
+		Let pairs      = std::get<AX>(_lines).vulnerable[!taker].of(2);
+		Let vulnerable = std::get<AX>(_lines).flanked   [!taker].of(0);
+		Let attacks    = std::get<AX>(_lines).flanked   [ taker].of(1);
+
+		auto const line2 = Line<AX,2>(pos+AXES[AX]);
+		auto const ends2 = compute( vec::reindex(Line<AX,4>(pos) ^ line2, line2.vindex()) );
+		taken += (unsigned)vec::sum(vec::popcount(
+			pairs & (vulnerable & attacks) & ends2
+		));
 	}
 	return taken;
-}
-
-// Les deux termes de place(), appliques a un score temporaire au lieu du
-// score reel : aucun CountBoard n'est modifie, aucun etat n'est copie.
-long Gomoku::moveDelta(Pos pos, bool P) const {
-	score_t tmp{};
-	auto const &p0 = _info[ P];
-	auto const &p1 = _info[!P];
-	template for (constexpr size_t AX : index_of(AXES)) {
-		auto const line = Line<AX>(pos);
-		auto const &p0lines = std::get<AX>(p0.lines);
-		auto const &p1lines = std::get<AX>(p1.lines);
-		p0lines.score( vec::compute(p1lines.of(0) & line), tmp.upgrade_updater(P) );
-		p1lines.score( vec::compute(p0lines.of(0) & line), tmp.block_updater(P)   );
-	}
-	return tmp.raw();
 }
 
 // --- Detection de menaces et legalite -------------------------------------
@@ -198,7 +233,7 @@ long Gomoku::moveDelta(Pos pos, bool P) const {
 
 Pos Gomoku::runStart(Pos pos, Dir dir, bool P) const {
 	Pos p = pos, back = p - dir;
-	while (back.valid() && _info[P].stones[back]) {
+	while (back.valid() && _stones[P][back]) {
 		p = back;
 		back = p - dir;
 	}
@@ -207,7 +242,7 @@ Pos Gomoku::runStart(Pos pos, Dir dir, bool P) const {
 
 Pos Gomoku::runEnd(Pos pos, Dir dir, bool P) const {
 	Pos p = pos, fwd = p + dir;
-	while (fwd.valid() && _info[P].stones[fwd]) {
+	while (fwd.valid() && _stones[P][fwd]) {
 		p = fwd;
 		fwd = p + dir;
 	}
@@ -288,7 +323,7 @@ bool Gomoku::isLegalMove(Pos pos, bool player) {
 	if (!pos.valid() || !stone(pos).empty())
 		return false;
 
-	auto const &pr = _rules.players[player];
+	Let pr = _rules.players[player];
 	if (!_rules.restricted(player))
 		return true;
 
@@ -357,12 +392,12 @@ bool Gomoku::isUnperfect5(Pos start, Pos end, Dir dir, bool P) const {
 
 			if (!flank0.valid() || !flank1.valid())
 				continue;
-			if (!_info[P].stones[pos1])
+			if (!_stones[P][pos1])
 				continue;
 
-			const bool f0Opp   = _info[opp].stones[flank0];
+			const bool f0Opp   = _stones[opp][flank0];
 			const bool f0Empty = stone(flank0).empty();
-			const bool f1Opp   = _info[opp].stones[flank1];
+			const bool f1Opp   = _stones[opp][flank1];
 			const bool f1Empty = stone(flank1).empty();
 
 			if ((f0Opp && f1Empty) || (f1Opp && f0Empty))
@@ -405,7 +440,7 @@ void Gomoku::play(Pos pos) {
 		return;
 
 	// 1. Victoire par capture : cinq paires prises.
-	if (_rules.capture && _captures[player] >= 10) {
+	if (_rules.capture && captures(player) >= 10) {
 		_resolved = player;
 		return;
 	}
@@ -417,7 +452,7 @@ void Gomoku::play(Pos pos) {
 		const int len = runLenOf(_dStart, _dEnd, _dDir);
 		bool intact = true;
 		for (int i = 0; i < len && intact; i++)
-			if (!_info[_dPlayer].stones[stepPos(_dStart, _dDir, i)])
+			if (!_stones[player][stepPos(_dStart, _dDir, i)])
 				intact = false;
 		if (intact) {
 			_resolved = _dPlayer;
@@ -469,7 +504,7 @@ void Gomoku::play(Pos pos) {
 		// capturable() n'est evalue que sur le fil des huit pierres, donc
 		// presque jamais : la condition de gauche court-circuite.
 		const bool outcounted = _rules.captureUnperfect
-			&& _captures[!player] >= 8 && capturable(!player) > 0;
+			&& captures(!player) >= 8 && capturable(!player) > 0;
 
 		if (breakable || outcounted) {
 			// Meme mecanisme dans les deux cas, et c'est la troisieme puce du
